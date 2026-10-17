@@ -12,6 +12,27 @@
 </head>
 <body>
   <canvas id="c"></canvas>
+  <div id="fatal" style="display:none"></div>
+  <script>
+    // Show load and runtime errors on the page, so a broken start is never just a blank screen.
+    (function () {
+      var shown = false;
+      function show(msg) {
+        if (shown) return; shown = true;
+        var el = document.getElementById('fatal');
+        el.innerHTML = '<b>Something went wrong starting the game.</b><br>' + String(msg).replace(/</g, '&lt;') + '<br><small>Try a hard refresh (Ctrl/Cmd+Shift+R). If it persists, please share this message.</small>';
+        el.style.display = "block";
+      }
+      window.__fatal = show;
+      addEventListener('error', function (e) { show((e.error && e.error.stack) || e.message || 'Script failed to load'); });
+      addEventListener('unhandledrejection', function (e) { show(e.reason && (e.reason.stack || e.reason.message) || e.reason); });
+      try {
+        var c = document.createElement('canvas');
+        if (!(c.getContext('webgl2') || c.getContext('webgl'))) show('WebGL is not available in this browser. Enable hardware acceleration and reload.');
+      } catch (err) { show(err); }
+    })();
+  </script>
+
 
   <div id="hud" class="hidden">
     <div id="side">
