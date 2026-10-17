@@ -2,6 +2,10 @@
 
 A fan-made 3D driving and stunt game for the browser, inspired by the new Tesla Roadster as shown at its launch event (15 October 2026, US time, at SpaceX's McGregor, Texas test site). Built with three.js and Vite. Playable with a keyboard or a gamepad.
 
+![Gameplay demo: 0-60 launch, the jump with a front flip, and the inverted wall ramp](docs/demo.gif)
+
+*Scripted demo: a bot drives the three stunts, so the landings are cleaner than most human runs. [Higher quality MP4](docs/demo.mp4). Re-record it with [tools/demo](tools/demo).*
+
 This is an unofficial tribute. It is not affiliated with or endorsed by Tesla or SpaceX, and it uses no Tesla assets. Everything is drawn procedurally in code.
 
 ## Play

@@ -132,7 +132,11 @@ function popup(html, big) {
   d.innerHTML = html;
   $('popups').appendChild(d);
   while ($('popups').children.length > 6) $('popups').firstChild.remove();
-  setTimeout(() => d.remove(), 2700);
+  if (window.__manual) {
+    // Frame-by-frame recording: drive the animation from game time instead of the wall clock.
+    d.style.animationPlayState = 'paused';
+    d.dataset.age = '0';
+  } else setTimeout(() => d.remove(), 2700);
 }
 function centerMsg(html, cls, ms) {
   const el = $('center');
@@ -341,22 +345,22 @@ function updateCamera(dt, t) {
 
   let desired;
   let look;
-  let fov = 62 + Math.min(speed, 90) * 0.28;
+  let fov = 60 + Math.min(speed, 90) * 0.2;
   if (v.mode === 'wall') {
-    desired = new THREE.Vector3(WALL.x0 + WALL.R * 0.55, WALL.R * 0.85, WALL.zc + 52);
+    desired = new THREE.Vector3(WALL.x0 + WALL.R * 0.4, WALL.R * 0.8, WALL.zc + 36);
     look = target.clone();
-    fov = 50;
-    camPos.lerp(desired, k(3));
+    fov = 56;
+    camPos.lerp(desired, k(4));
   } else if (camMode === 2) {
     desired = new THREE.Vector3(0.1, 0.38, -0.36).applyQuaternion(v.q).add(v.pos);
     camPos.copy(desired);
     look = new THREE.Vector3(10, 0.1, -0.2).applyQuaternion(v.q).add(v.pos);
   } else {
-    const dist = camMode === 1 ? 13 : 7.8;
-    const height = camMode === 1 ? 4.6 : 2.5;
-    desired = target.clone().addScaledVector(flat, -dist - Math.min(speed, 80) * 0.03);
+    const dist = camMode === 1 ? 12 : v.mode === 'air' ? 7.6 : 6.8;
+    const height = camMode === 1 ? 4.2 : 2.2;
+    desired = target.clone().addScaledVector(flat, -dist - Math.min(speed, 80) * 0.012);
     desired.y += height + (v.mode === 'air' ? 0.8 : 0);
-    camPos.lerp(desired, k(v.mode === 'air' ? 3 : 9));
+    camPos.lerp(desired, k(v.mode === 'air' ? 9 : 13));
     look = target.clone().addScaledVector(flat, 5.5);
     look.y += 0.4;
   }
@@ -393,11 +397,32 @@ const NONE = {};
 
 function frame(now) {
   requestAnimationFrame(frame);
+  if (window.__manual) return;
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
+  update(dt);
+}
+
+// One full game frame. `window.__demo` (set by the demo recorder) replaces live input with scripted input.
+function update(dt) {
   clock += dt;
-  input.update();
-  const P = input.p;
+  if (window.__manual) {
+    for (const d of [...$('popups').children]) {
+      const age = +d.dataset.age + dt;
+      d.dataset.age = String(age);
+      d.style.animationDelay = `${-age}s`;
+      if (age > 2.7) d.remove();
+    }
+  }
+  let P;
+  if (window.__demo) {
+    Object.assign(input.s, { throttle: 0, brake: 0, steer: 0, pitch: 0, roll: 0, yaw: 0, thrust: false, handbrake: false }, window.__demo.ctrl);
+    P = window.__demo.pressed || {};
+    window.__demo.pressed = {};
+  } else {
+    input.update();
+    P = input.p;
+  }
 
   if (P.mute) { sound.muted = !sound.muted; toast(sound.muted ? 'Sound off' : 'Sound on'); }
 
@@ -451,5 +476,5 @@ function advance(seconds, ctrl = {}, pressed = {}) {
   for (let i = 0; i < n; i++) { vehicle.step(STEP, input.s, i === 0 ? pressed : NONE); handleEvents(); }
   for (let i = 0; i < 4; i++) emitFx(STEP * 4, input.s);
 }
-window.__game = { advance, fx, vehicle, input, camera, scene, setVariant, select, beginDrive, get model() { return model; }, SPAWNS };
+window.__game = { advance, tick: update, snapCamera: () => { updateCamera(10, clock); updateCamera(10, clock); }, fx, vehicle, input, camera, scene, setVariant, select, beginDrive, get model() { return model; }, SPAWNS };
 requestAnimationFrame(frame);
