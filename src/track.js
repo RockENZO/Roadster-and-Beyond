@@ -40,13 +40,18 @@ for (const c of LINEUP) {
   }
 }
 
-// The C-shaped wall. The car drives on the inside of a circle of radius R whose axis runs
-// along z through (x0, R): up the curve, onto the vertical, and out along the ceiling, upside down.
-// theta is the angle travelled round the curve: 0 at the bottom, pi/2 vertical, pi inverted.
-export const WALL = { x0: 520, zc: 45, R: 8, hw: 4.5, thetaMax: Math.PI, thick: 0.6 };
+// The wall ramp from the event clip: a tall, narrow concrete ramp with red edge lights that
+// curls from flat to vertical and on past it. The car drives on the inside of a circle of radius R
+// whose axis runs along z through (x0, R). theta is the angle travelled round the curve: 0 at the
+// bottom, pi/2 vertical, and thetaMax (170 deg, ~68 ft up, as on the broadcast HUD) at the lip.
+export const WALL = { x0: 520, zc: 45, R: 10.4, hw: 3, thetaMax: 170 * Math.PI / 180, thick: 0.6 };
 
-// Painted pad for the standing flip.
-export const FLIP_PAD = { x: 150, z: 80, r: 9 };
+// Stage for the vertical jump and flip: a lane ending at a tall red-lit pillar with fans of
+// white beams either side (the car faces away from it, toward the cameras).
+export const FLIP_PAD = { x: 150, z: 80, r: 9, pillarX: 134 };
+
+// Approach lane to the lineup: white centre line, red light strips along both barriers.
+export const LINEUP_LANE = { x0: 60, x1: LINEUP_X - 12, zc: 0, hw: 9 };
 
 // Display of Musk's Lotus Esprit, by the start.
 export const LOTUS = { x: -40, z: -78, yaw: 0.6 };

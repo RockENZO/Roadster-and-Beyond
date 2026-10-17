@@ -106,3 +106,20 @@ h1 span { color: var(--accent); }
 #watch:hover, #watch.sel { border-color: var(--accent); color: var(--accent); }
 #go.sel { box-shadow: 0 0 0 2px var(--accent); }
 @media (max-width: 760px) { #instr { display: none; } #stunt { display: none; } }
+
+/* ---- broadcast overlay (after the launch stream) ---- */
+#bhud { position: fixed; left: 0; right: 0; bottom: 0; pointer-events: none; display: flex; justify-content: space-between; align-items: flex-end; padding: 0 1.2vw 0.6vw; }
+#bhud .grp { display: flex; align-items: center; gap: 0.6vw; }
+#bhud canvas { width: clamp(78px, 7.2vw, 150px); height: clamp(78px, 7.2vw, 150px); }
+#bhud #thr { width: calc(clamp(78px, 7.2vw, 150px) * 0.667); }
+#caption { position: fixed; left: 1.2vw; top: 1.4vw; font: 700 clamp(13px, 1.25vw, 24px)/1 "Rajdhani", system-ui, sans-serif; letter-spacing: .02em; color: #fff; text-transform: uppercase; transition: opacity .6s; text-shadow: 0 1px 8px rgba(0,0,0,.6); pointer-events: none; }
+#caption.off { opacity: 0; }
+#side { top: auto; bottom: calc(clamp(78px, 7.2vw, 150px) + 2vw); }
+#side > div, #hints, #toast { font-family: "Rajdhani", system-ui, sans-serif; }
+#side b { font-family: "Rajdhani", system-ui, sans-serif; font-weight: 600; }
+#hints { left: auto; right: 24px; bottom: auto; top: 18px; }
+#stunt { order: -1; }
+#show #showhint { bottom: auto; top: 1.4vw; right: 1.2vw; }
+.pop { font-family: "Rajdhani", system-ui, sans-serif; }
+#center { font-family: "Rajdhani", system-ui, sans-serif; }
+@media (max-width: 760px) { #side { bottom: 110px; } }

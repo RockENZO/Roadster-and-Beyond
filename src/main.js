@@ -8,6 +8,7 @@ import { Input } from './input.js';
 import { Sound } from './audio.js';
 import { WALL, SPAWNS, LINEUP, STRIP, PAD } from './track.js';
 import { EventShow, stuntFor } from './event.js';
+import { BroadcastHud } from './hud.js';
 
 const $ = (id) => document.getElementById(id);
 const TAU = Math.PI * 2;
@@ -23,7 +24,8 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, 1, 0.3, 6000);
 const world = buildWorld(scene, renderer);
 renderer.toneMappingExposure = world.exposure || 1;
-const fx = new Particles(scene, 2600);
+const fx = new Particles(scene, 4200);
+const bhud = new BroadcastHud(renderer, scene);
 const input = new Input();
 const sound = new Sound();
 const vehicle = new Vehicle();
@@ -102,6 +104,7 @@ function beginDrive() {
   closeMenu();
   $('show').classList.add('hidden');
   $('hud').classList.remove('hidden');
+  bhud.show(true); hudMode = 'drive';
   if (vehicle.p.key !== keys[selected]) setVariant(keys[selected], 'start');
   camOverride = null;
   renderHints();
@@ -118,6 +121,8 @@ function beginShow() {
 function openMenu() {
   if (show.active) { show.stop(); $('show').classList.add('hidden'); }
   menuOpen = true;
+  bhud.show(false);
+  setCaption('');
   $('menu').classList.remove('hidden');
   $('go').textContent = started ? 'Resume' : 'Drive';
   menuHint();
@@ -189,27 +194,17 @@ const STUNT_TEXT = {
   wall: ['C-wall', 'Drive in at ~35 mph and keep climbing. Brake at the top to hang, then fans off to drop.'],
 };
 
-const gctx = $('gmeter').getContext('2d');
-const nctx = $('nozmap').getContext('2d');
 let hudTick = 0;
+let hudMode = null;
+let capT = 0;
+function setCaption(t, secs) {
+  const el = $('caption');
+  if (t) { el.textContent = t; el.classList.remove('off'); } else el.classList.add('off');
+  capT = secs || 0;
+}
+
 function updateHud(dt) {
   const v = vehicle;
-  $('speed').textContent = Math.round(Math.abs(v.vFwd) * MPH);
-  $('variant').textContent = v.p.name;
-  const tags = [];
-  if (v.trackMode) tags.push('Track');
-  if (v.releaseT > 0) tags.push('Fans off');
-  if (v.onWall) tags.push(`Wall ${Math.round(v.wallTh * 180 / Math.PI)}°`);
-  if (v.hovering) tags.push('Hover');
-  $('mode').textContent = tags.join(' · ');
-  $('suc').style.width = `${v.suction * 100}%`;
-  $('sucv').textContent = `${(v.suction * 2).toFixed(1)} g`;
-  $('gaswrap').style.display = v.p.gas ? '' : 'none';
-  if (v.p.gas) {
-    $('gas').style.width = `${(v.gas / v.p.gas) * 100}%`;
-    $('gas').classList.toggle('low', v.gas / v.p.gas < 0.2);
-    $('gasv').textContent = `${Math.round(v.gas)} kg`;
-  }
   const t = v.t60;
   const box = $('t60');
   box.className = t.state === 'run' ? 'run' : t.state === 'done' ? 'done' : '';
@@ -221,35 +216,8 @@ function updateHud(dt) {
     hudTick = 0.25;
     const st = stuntFor(v.pos);
     const [title, desc] = STUNT_TEXT[st.key];
-    $('stuntt').textContent = title.toUpperCase();
+    $('stuntt').textContent = `${v.p.name.toUpperCase()} · ${title.toUpperCase()}`;
     $('stuntd').textContent = desc;
-  }
-  // G meter: longitudinal (up = accelerating) and lateral, 2.5 g full scale.
-  const g = gctx, W = 120, c = W / 2;
-  g.clearRect(0, 0, W, W);
-  g.strokeStyle = 'rgba(255,255,255,.18)'; g.lineWidth = 1;
-  for (const r of [0.4, 0.8]) { g.beginPath(); g.arc(c, c, r * 50, 0, TAU); g.stroke(); }
-  g.beginPath(); g.moveTo(c - 50, c); g.lineTo(c + 50, c); g.moveTo(c, c - 50); g.lineTo(c, c + 50); g.stroke();
-  const gx = THREE.MathUtils.clamp(v.acc.z / 9.81 / 2.5, -1, 1), gy = THREE.MathUtils.clamp(v.acc.x / 9.81 / 2.5, -1, 1);
-  g.fillStyle = '#9fd8ff'; g.beginPath(); g.arc(c + gx * 50, c - gy * 50, 6, 0, TAU); g.fill();
-  g.fillStyle = '#dfe5ee'; g.font = '700 13px system-ui'; g.textAlign = 'center';
-  g.fillText(`${(Math.hypot(v.acc.x, v.acc.z) / 9.81).toFixed(1)} g`, c, W - 12);
-  // Thruster map: car outline from above, a dot per nozzle lit by its throttle.
-  const n = nctx;
-  n.clearRect(0, 0, W, W);
-  $('nozmap').style.display = v.p.nozzles.length ? '' : 'none';
-  if (v.p.nozzles.length) {
-    const sx = 22, sz = 30;
-    n.strokeStyle = 'rgba(255,255,255,.35)'; n.lineWidth = 2;
-    n.beginPath();
-    n.moveTo(c - 0.75 * sz, c - 2.14 * sx); n.lineTo(c + 0.75 * sz, c - 2.14 * sx); n.lineTo(c + 1.0 * sz, c - 1.0 * sx);
-    n.lineTo(c + 0.95 * sz, c + 2.06 * sx); n.lineTo(c - 0.95 * sz, c + 2.06 * sx); n.lineTo(c - 1.0 * sz, c - 1.0 * sx); n.closePath(); n.stroke();
-    for (const nz of v.p.nozzles) {
-      const u = v.nozzleU[nz.id];
-      const px = c + nz.pos.z * sz, py = c - nz.pos.x * sx;
-      n.fillStyle = u > 0.02 ? `rgba(170,225,255,${0.35 + 0.65 * u})` : 'rgba(255,255,255,.18)';
-      n.beginPath(); n.arc(px + nz.dir.z * 6, py - nz.dir.x * 6, 3 + 4 * u, 0, TAU); n.fill();
-    }
   }
 }
 
@@ -315,12 +283,12 @@ function handleEvents() {
         }
         break;
       }
-      case 'wall': popup('SUCTION 2 G', false); sound.burst(0.4, 3000, 0.3); break;
-      case 'hang': popup('HANGING UPSIDE DOWN', true); vehicle.hungBefore = true; sound.ding(); break;
+      case 'wall': if (!show.active) setCaption('Vertical wall climb', 4); popup('SUCTION ON', false); sound.burst(0.4, 3000, 0.3); break;
+      case 'hang': if (!show.active) setCaption('Holding upside down', 4); popup('HANGING UPSIDE DOWN', true); vehicle.hungBefore = true; sound.ding(); break;
       case 'fans-off': popup('FANS OFF', false); break;
       case 'track': toast(ev.on ? 'Track Mode: lower, stiffer, wing up, more suction' : 'Track Mode off'); break;
       case 'hop': sound.burst(0.35, 2600, 0.45); input.rumble(0.6, 0.8, 160); break;
-      case 'release': break;
+      case 'release': if (!show.active) setCaption('Flight off the ramp', 4); break;
     }
   }
 }
@@ -350,17 +318,34 @@ function burstCrash(at) {
 let smokeAcc = 0;
 function emitFx(dt) {
   const v = vehicle;
-  // Cold gas: a plume from every firing nozzle, scaled by its throttle.
+  // Cold gas: a plume from every firing nozzle, scaled by its throttle. The lift jets are long
+  // pale-cyan columns; where they hit the ground they throw up the big white clouds seen on the
+  // broadcast, part-lit red by the stage lights.
   const noz = v.p.nozzles;
   for (const n of noz) {
     const u = v.nozzleU[n.id];
     if (u < 0.04) continue;
     model.nozzleWorld(n, _p, _d);
-    const k = u > 0.6 ? 3 : u > 0.25 ? 2 : 1;
+    const lift = n.group === 'lift';
+    const k = lift ? (u > 0.5 ? 4 : u > 0.2 ? 3 : 1) : u > 0.6 ? 3 : u > 0.25 ? 2 : 1;
     for (let i = 0; i < k; i++) {
-      _v.copy(_d).multiplyScalar(14 + 16 * u).addScaledVector(v.vel, 0.6);
-      _v.x += rnd(1.4); _v.y += rnd(1.4); _v.z += rnd(1.4);
-      fx.emit(_p, _v, { life: 0.35 + 0.35 * u, size: 0.25 + 0.3 * u, grow: 3 + 2 * u, alpha: 0.35 + 0.25 * u, color: [0.88, 0.95, 1], drag: 2.8 });
+      const sp = lift ? 26 + 20 * u : 14 + 16 * u;
+      _v.copy(_d).multiplyScalar(sp * (0.8 + Math.random() * 0.4)).addScaledVector(v.vel, 0.6);
+      _v.x += rnd(1.1); _v.y += rnd(1.1); _v.z += rnd(1.1);
+      _r.copy(_p).addScaledVector(_d, Math.random() * 0.6);
+      fx.emit(_r, _v, lift
+        ? { life: 0.28 + 0.25 * u, size: 0.32, grow: 2.6, alpha: 0.5, color: [0.78, 0.94, 1], drag: 1.6 }
+        : { life: 0.35 + 0.35 * u, size: 0.25 + 0.3 * u, grow: 3 + 2 * u, alpha: 0.35 + 0.25 * u, color: [0.88, 0.95, 1], drag: 2.8 });
+    }
+    // ground impingement
+    if (_d.y < -0.5 && _p.y < 9 && Math.random() < u * (1 - _p.y / 10) * 0.9) {
+      for (let i = 0; i < 2; i++) {
+        const a = Math.random() * TAU, sp = 5 + Math.random() * 9;
+        _r.set(_p.x + rnd(0.6), 0.25, _p.z + rnd(0.6));
+        _v.set(Math.cos(a) * sp, 0.6 + Math.random() * 2.2, Math.sin(a) * sp);
+        const red = Math.random() < 0.3;
+        fx.emit(_r, _v, { life: 2.6 + Math.random() * 2.2, size: 1.3, grow: 4.5, alpha: 0.26, color: red ? [1, 0.55, 0.6] : [0.92, 0.94, 0.97], drag: 0.9, grav: -0.25 });
+      }
     }
   }
   // Tyre smoke when sliding.
@@ -544,15 +529,8 @@ function frame(now) {
 }
 
 const ui = {
-  eventCard(seg, first, dim) {
-    const card = $('showcard');
-    if (!seg) { card.classList.add('dim'); $('count').textContent = ''; return; }
-    $('showk').textContent = first ? 'Live from McGregor, Texas' : seg.key === 'reveal' ? '' : 'Launch night';
-    $('showt').textContent = seg.title;
-    $('shows').textContent = seg.sub;
-    card.classList.toggle('dim', !!dim);
-  },
-  countdown(n) { $('count').textContent = n > 0 ? String(n) : ''; },
+  caption(t) { if (($('caption').textContent !== t) || !t) setCaption(t); },
+  hud(mode) { hudMode = mode; bhud.show(!!mode); },
   eventDone() { $('show').classList.add('hidden'); openMenu(); },
 };
 const show = new EventShow({ vehicle, setVariant, setCam, ui, mst, setLights: (on) => { lights = !!on; } });
@@ -568,6 +546,7 @@ function update(dt) {
       if (age > 2.7) d.remove();
     }
   }
+  if (capT > 0) { capT -= dt; if (capT <= 0) setCaption(''); }
   if (centerT > 0) { centerT -= dt; if (centerT <= 0) $('center').innerHTML = ''; }
   let P;
   if (window.__demo) {
@@ -593,7 +572,7 @@ function update(dt) {
     if (P.pause || P.back) { show.stop(); beginDrive(); }
     else {
       const o = show.update(dt);
-      ctrl = o.c; stepP = o.P; run = true;
+      ctrl = o.c; stepP = o.P; run = !o.replay;
     }
   } else {
     run = true;
@@ -647,7 +626,9 @@ function update(dt) {
       });
     }
   }
+  bhud.update(dt, vehicle, mst, hudMode);
   renderer.render(scene, camera);
+  bhud.render();
 }
 
 select(0);

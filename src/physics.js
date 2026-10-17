@@ -11,7 +11,7 @@ export const MPH = 2.23694;
 
 const SUB = 2;            // substeps per game step (game steps at 120 Hz)
 const MU = 1.26;          // tyre friction: launch coverage quoted ~1.26 g from tyres alone
-const SUCTION_G = 2;      // fans: up to 2 g of suction
+const SUCTION_KG = 4700;  // fans: 4,700 kg of downforce at full suction (the broadcast HUD peaked at ~4,700 kg)
 const POWER = 1.0e6;      // ~1 MW
 const VMAX = 104;         // ~232 mph governor
 const G0 = 9.80665;
@@ -276,7 +276,7 @@ export class Vehicle {
     this.braking = false;
     if (inp.throttle > 0.02) drive = inp.throttle;
     // Brake to a stop and hold; keep holding the brake at a standstill to engage reverse.
-    if (inp.brake > 0.02 && inp.throttle < 0.02 && Math.abs(vF) < 0.8) this.revT += h; else if (vF > 0.8 || inp.brake < 0.02) this.revT = 0;
+    if (inp.brake > 0.02 && inp.throttle < 0.02 && Math.abs(vF) < 0.8) this.revT += h; else if (vF > 0.8 || inp.throttle > 0.02) this.revT = 0;
     if (inp.brake > 0.02) {
       if (this.revT > 0.35 && inp.throttle < 0.02) drive = -inp.brake;
       else { brake = inp.brake; this.braking = vF > 0.8; }
@@ -293,9 +293,9 @@ export class Vehicle {
     const steep = nc ? nAvg.y < 0.6 : false;
     let target = 0;
     if (nc >= 2 && this.releaseT <= 0) {
-      target = 0.12;
-      if (this.trackMode) target = 0.6;
-      if (drive > 0.5 && Math.abs(vF) < 30) target = Math.max(target, 0.22);
+      target = 0.24 * m / SUCTION_KG;
+      if (this.trackMode) target = 0.5;
+      if (drive > 0.5 && Math.abs(vF) < 30) target = Math.max(target, 0.44 * m / SUCTION_KG);
       if (Math.abs(this.steer) > 0.05 && speed > 15) target = Math.max(target, 0.45);
       if (brake > 0.3) target = Math.max(target, 0.5);
       if (steep || this.onWall) target = 1;
@@ -303,7 +303,7 @@ export class Vehicle {
     this.suctionTarget = target;
     this.suction += (target - this.suction) * Math.min(1, h * 8);
     if (nc >= 2 && this.suction > 0.01) {
-      this.F.addScaledVector(nAvg, -this.suction * SUCTION_G * m * G);
+      this.F.addScaledVector(nAvg, -this.suction * SUCTION_KG * G);
     }
 
     // ---- Aero ----
@@ -312,7 +312,9 @@ export class Vehicle {
     this.airbrake += ((this.braking && speed > 25 && brake > 0.5 ? 1 : 0) - this.airbrake) * Math.min(1, h * 6);
     const cda = CDA + 0.7 * this.airbrake;
     if (speed > 0.1) this.F.addScaledVector(this.vel, -0.5 * RHO * cda * speed);
-    if (this.contacts && vF > 0) this.F.addScaledVector(this.up, -0.5 * RHO * (wingUp ? 1.4 : 0.35) * vF * vF);
+    const aero = this.contacts && vF > 0 ? 0.5 * RHO * (wingUp ? 1.4 : 0.35) * vF * vF : 0;
+    if (aero) this.F.addScaledVector(this.up, -aero);
+    this.downforce = (nc >= 2 ? this.suction * SUCTION_KG : 0) + aero / G;
 
     // ---- Wheels ----
     const k = SUSP.k * (1 + this.suction * 1.4) * (this.trackMode ? 1.4 : 1);
@@ -462,7 +464,7 @@ export class Vehicle {
       let L = 0;
       if (this.hopT > 0) L = Lmax * 0.92;
       else if (inp.lift && airborne && upW.y > 0.15) {
-        const vyT = 4 * (inp.throttle || 0) - 4 * (inp.brake || 0);
+        const vyT = 5 * (inp.throttle || 0) - 6 * (inp.brake || 0);
         L = clamp(m * (G + 3 * (vyT - this.vel.y)) / Math.max(upW.y, 0.35), 0, Lmax);
         this.hovering = true;
       }
@@ -476,11 +478,19 @@ export class Vehicle {
           cz = -inp.pitch * 5;
           cy = -inp.yaw * 2.4;
         } else {
-          // tilt error between body up and world up
-          let ex = upW.z, ez = -upW.x; // (0,1,0) x upW = (upW.z, 0, -upW.x)
+          // Level the car. While hovering, lean against horizontal drift like a drone (up to ~25 deg).
+          const tg = _f.set(0, 1, 0);
+          if (inp.lift && this.hopT <= 0) {
+            tg.set(-this.vel.x * 0.12, 1, -this.vel.z * 0.12);
+            const hl = Math.hypot(tg.x, tg.z);
+            if (hl > 0.47) { tg.x *= 0.47 / hl; tg.z *= 0.47 / hl; }
+            tg.normalize();
+          }
+          tg.applyQuaternion(_qi);
+          let ex = tg.z, ez = -tg.x; // (0,1,0) x tg = (tg.z, 0, -tg.x)
           const s = Math.hypot(ex, ez);
-          const ang = Math.atan2(s, upW.y);
-          if (s < 1e-4 && upW.y < 0) { ex = 1; ez = 0; } else if (s > 1e-6) { ex /= s; ez /= s; }
+          const ang = Math.atan2(s, tg.y);
+          if (s < 1e-4 && tg.y < 0) { ex = 1; ez = 0; } else if (s > 1e-6) { ex /= s; ez /= s; }
           const r = Math.min(ang * 3.2, 4.2);
           cx = ex * r; cz = ez * r;
           cy = 0;

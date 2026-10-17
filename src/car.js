@@ -25,26 +25,29 @@ const NP = 9;
 
 // Key sections [x, [[y, z] for F0..T]]. Linear interpolation between keys keeps every crease straight.
 const KEYS = [
-  [2.14, [[-0.27, 0], [-0.27, 0.56], [-0.28, 0.72], [-0.2, 0.76], [-0.11, 0.79], [-0.035, 0.8], [-0.03, 0.68], [-0.03, 0.36], [-0.03, 0]]],
-  [1.98, [[-0.33, 0], [-0.33, 0.6], [-0.335, 0.86], [-0.24, 0.9], [-0.05, 0.94], [0.08, 0.92], [0.09, 0.75], [0.075, 0.4], [0.09, 0]]],
-  [1.36, [[-0.35, 0], [-0.35, 0.6], [-0.35, 0.95], [-0.26, 0.99], [0.05, 1.0], [0.29, 0.97], [0.31, 0.81], [0.28, 0.44], [0.3, 0]]],
-  [1.1, [[-0.36, 0], [-0.36, 0.6], [-0.36, 0.96], [-0.27, 0.99], [0.04, 1.0], [0.315, 0.955], [0.335, 0.83], [0.335, 0.64], [0.345, 0]]],
-  [0.84, [[-0.36, 0], [-0.36, 0.6], [-0.36, 0.97], [-0.27, 0.99], [0.03, 1.0], [0.32, 0.95], [0.34, 0.87], [0.415, 0.63], [0.425, 0]]],
-  [0.2, [[-0.36, 0], [-0.36, 0.6], [-0.36, 0.97], [-0.25, 0.985], [0.02, 1.0], [0.335, 0.945], [0.36, 0.87], [0.585, 0.57], [0.6, 0]]],
-  [-0.28, [[-0.36, 0], [-0.36, 0.6], [-0.36, 0.97], [-0.21, 0.98], [0.035, 0.995], [0.37, 0.945], [0.41, 0.86], [0.6, 0.56], [0.61, 0]]],
-  [-1.0, [[-0.36, 0], [-0.36, 0.6], [-0.36, 0.95], [-0.12, 0.97], [0.06, 1.0], [0.4, 0.97], [0.52, 0.64], [0.53, 0.54], [0.54, 0]]],
-  [-1.36, [[-0.37, 0], [-0.37, 0.6], [-0.37, 0.95], [-0.1, 0.99], [0.07, 1.0], [0.385, 0.975], [0.48, 0.6], [0.485, 0.5], [0.49, 0]]],
-  [-1.75, [[-0.37, 0], [-0.37, 0.6], [-0.37, 0.93], [-0.1, 0.97], [0.07, 0.98], [0.36, 0.955], [0.43, 0.64], [0.43, 0.48], [0.435, 0]]],
-  [-2.06, [[-0.38, 0], [-0.38, 0.6], [-0.38, 0.86], [-0.1, 0.9], [0.06, 0.925], [0.33, 0.92], [0.37, 0.76], [0.37, 0.45], [0.37, 0]]],
+  [2.14, [[-0.28, 0], [-0.28, 0.5], [-0.29, 0.64], [-0.24, 0.68], [-0.12, 0.7], [-0.04, 0.69], [-0.03, 0.675], [-0.03, 0.655], [-0.03, 0]]],
+  [1.98, [[-0.32, 0], [-0.32, 0.58], [-0.33, 0.84], [-0.25, 0.88], [-0.06, 0.915], [0.07, 0.885], [0.085, 0.8], [0.075, 0.645], [0.085, 0]]],
+  [1.36, [[-0.35, 0], [-0.35, 0.6], [-0.35, 0.95], [-0.27, 0.985], [0.0, 1.0], [0.27, 0.965], [0.275, 0.86], [0.26, 0.625], [0.27, 0]]],
+  [1.18, [[-0.36, 0], [-0.36, 0.6], [-0.36, 0.96], [-0.27, 0.99], [0.02, 1.0], [0.285, 0.955], [0.29, 0.89], [0.29, 0.61], [0.3, 0]]],
+  [0.84, [[-0.36, 0], [-0.36, 0.6], [-0.36, 0.97], [-0.255, 0.99], [0.02, 1.0], [0.265, 0.955], [0.28, 0.9], [0.4, 0.6], [0.41, 0]]],
+  [0.2, [[-0.36, 0], [-0.36, 0.6], [-0.36, 0.97], [-0.21, 0.985], [0.03, 1.0], [0.33, 0.95], [0.35, 0.895], [0.585, 0.57], [0.6, 0]]],
+  [-0.28, [[-0.36, 0], [-0.36, 0.6], [-0.36, 0.97], [-0.16, 0.98], [0.05, 0.995], [0.39, 0.945], [0.415, 0.875], [0.605, 0.56], [0.615, 0]]],
+  [-0.65, [[-0.36, 0], [-0.36, 0.6], [-0.36, 0.965], [-0.13, 0.975], [0.06, 0.995], [0.42, 0.95], [0.46, 0.81], [0.59, 0.555], [0.6, 0]]],
+  [-1.0, [[-0.36, 0], [-0.36, 0.6], [-0.36, 0.95], [-0.1, 0.97], [0.06, 1.0], [0.42, 0.965], [0.54, 0.56], [0.55, 0.54], [0.56, 0]]],
+  [-1.36, [[-0.37, 0], [-0.37, 0.6], [-0.37, 0.95], [-0.1, 0.99], [0.07, 1.0], [0.39, 0.975], [0.49, 0.6], [0.5, 0.5], [0.505, 0]]],
+  [-1.75, [[-0.37, 0], [-0.37, 0.6], [-0.37, 0.93], [-0.1, 0.97], [0.07, 0.98], [0.37, 0.955], [0.42, 0.64], [0.425, 0.48], [0.43, 0]]],
+  [-1.84, [[-0.375, 0], [-0.375, 0.6], [-0.375, 0.79], [-0.1, 0.81], [0.07, 0.9], [0.36, 0.94], [0.41, 0.66], [0.415, 0.47], [0.42, 0]]],
+  [-2.06, [[-0.38, 0], [-0.38, 0.6], [-0.38, 0.77], [-0.1, 0.79], [0.06, 0.84], [0.34, 0.87], [0.37, 0.72], [0.37, 0.45], [0.37, 0]]],
 ];
 const NOSE_X = KEYS[0][0];
 const TAIL_X = KEYS[KEYS.length - 1][0];
-const WIN_FRONT = 1.1; // windshield base
+const WIN_FRONT = 1.18; // windshield base
 const SIDE_GLASS_REAR = -1.0;
 const REAR_GLASS_END = -1.75;
 const DOOR_FRONT = 0.84;
 const DOOR_REAR = -0.28;
-const ARCH_R = 0.4;
+const ARCH_R = 0.4; // horizontal radius
+const ARCH_RY = 0.36; // vertical radius (the fender sits tight over the tyre)
 const ARCH_CY = SUSP.radius - COM_H; // wheel centre height at rest
 
 function sectionAt(x) {
@@ -140,7 +143,7 @@ export class RoadsterModel {
     this.variant = variant;
     this.group = new THREE.Group();
     this.group.name = 'roadster';
-    this.cockpit = new THREE.Vector3(-0.22, 0.33, variant.seats === 2 ? -0.33 : 0);
+    this.cockpit = new THREE.Vector3(-0.1, 0.33, variant.seats === 2 ? -0.33 : 0);
     this.nozzles = variant.nozzles;
     this.wheelObjs = [];
     this.fanRotors = [];
@@ -164,14 +167,14 @@ export class RoadsterModel {
   makeMaterials() {
     this.mat = {
       paint: new THREE.MeshPhysicalMaterial({
-        color: 0xd4d7da, metalness: 0.5, roughness: 0.35, clearcoat: 1, clearcoatRoughness: 0.25, envMapIntensity: 1.15,
+        color: 0xb9bdc2, metalness: 0.5, roughness: 0.35, clearcoat: 1, clearcoatRoughness: 0.25, envMapIntensity: 1.15,
       }),
       black: new THREE.MeshStandardMaterial({ color: 0x0d0e10, metalness: 0.35, roughness: 0.55 }),
       gloss: new THREE.MeshPhysicalMaterial({ color: 0x08090a, metalness: 0.4, roughness: 0.18, clearcoat: 1 }),
       liner: new THREE.MeshStandardMaterial({ color: 0x141518, roughness: 0.85, side: THREE.FrontSide }),
       glass: new THREE.MeshPhysicalMaterial({
-        color: 0x2a1d14, metalness: 0.55, roughness: 0.06, transparent: true, opacity: 0.86,
-        side: THREE.DoubleSide, envMapIntensity: 1.4, clearcoat: 1, clearcoatRoughness: 0.03,
+        color: 0x2a1d14, metalness: 0.35, roughness: 0.05, transparent: true, opacity: 0.9,
+        side: THREE.DoubleSide, envMapIntensity: 0.75, clearcoat: 1, clearcoatRoughness: 0.03,
       }),
       gray: new THREE.MeshStandardMaterial({ color: 0x7c8187, metalness: 0.5, roughness: 0.4 }),
       rimFace: new THREE.MeshStandardMaterial({ color: 0xb4b8bd, metalness: 0.55, roughness: 0.35 }),
@@ -180,7 +183,7 @@ export class RoadsterModel {
       seatGray: new THREE.MeshStandardMaterial({ color: 0xb9bbbd, roughness: 0.85 }),
       metal: new THREE.MeshStandardMaterial({ color: 0x3b3f45, metalness: 0.9, roughness: 0.3 }),
       drl: new THREE.MeshStandardMaterial({ color: 0x111111, emissive: 0xf2f6ff, emissiveIntensity: 2.2 }),
-      tail: new THREE.MeshStandardMaterial({ color: 0x220000, emissive: 0xff1418, emissiveIntensity: 1.6 }),
+      tail: new THREE.MeshBasicMaterial({ color: 0xc00006, toneMapped: false }),
       amber: new THREE.MeshStandardMaterial({ color: 0x331800, emissive: 0xff8a10, emissiveIntensity: 1.4 }),
       head: new THREE.MeshStandardMaterial({ color: 0x15171a, emissive: 0xeaf2ff, emissiveIntensity: 0 }),
       ambient: new THREE.MeshStandardMaterial({ color: 0x300000, emissive: 0xff1a22, emissiveIntensity: 1.6 }),
@@ -193,23 +196,27 @@ export class RoadsterModel {
   // ---------------------------------------------------------------- body shell
   buildBody() {
     const m = this.group;
-    // Station list: every key plus a polygonal arch at each axle (the edge stations are doubled so
-    // the arch drops vertically to the sill).
-    const st = [];
-    for (const [x] of KEYS) st.push({ x, arch: null });
-    for (const wx of [WHEELS[0].x, WHEELS[2].x]) {
-      const n = 10;
-      for (let i = 0; i <= n; i++) {
-        const th = (i / n) * PI;
-        const x = wx + ARCH_R * Math.cos(th);
-        const y = ARCH_CY + ARCH_R * Math.sin(th);
-        if (i === 0) st.push({ x, arch: null, order: 0 });
-        st.push({ x, arch: y, order: i === 0 ? 1 : i === n ? 1 : 0 });
-        if (i === n) st.push({ x, arch: null, order: 2 });
+    // Station list: every key plus a polygonal arch at each axle. Any station inside an arch has its
+    // sill points lifted to the arch line; the arch-edge stations are doubled so the arch drops
+    // vertically to the sill.
+    const xs = KEYS.map((k) => k[0]);
+    const axles = [WHEELS[0].x, WHEELS[2].x];
+    for (const wx of axles) for (let i = 1; i < 10; i++) xs.push(wx + ARCH_R * Math.cos((i / 10) * PI));
+    const archY = (x) => {
+      for (const wx of axles) {
+        const dx = (x - wx) / ARCH_R;
+        if (Math.abs(dx) < 1 - 1e-6) return ARCH_CY + ARCH_RY * Math.sqrt(1 - dx * dx);
+      }
+      return null;
+    };
+    const st = xs.map((x) => ({ x, arch: archY(x), order: 0 }));
+    for (const wx of axles) {
+      for (const sgn of [1, -1]) {
+        const x = wx + ARCH_R * sgn;
+        st.push({ x, arch: null, order: sgn > 0 ? 0 : 2 }, { x, arch: ARCH_CY, order: 1 });
       }
     }
-    st.sort((a, b) => b.x - a.x || (a.order || 0) - (b.order || 0));
-    // remove arch-free duplicate keys exactly at an arch-centre (keep the arch version)
+    st.sort((a, b) => b.x - a.x || a.order - b.order);
     const stations = [];
     for (const s of st) {
       const pts = sectionAt(s.x);
@@ -220,15 +227,17 @@ export class RoadsterModel {
         if (pts[C][0] < pts[P][0] + 0.03) pts[C][0] = pts[P][0] + 0.03;
         if (pts[B][0] < pts[C][0] + 0.04) pts[B][0] = pts[C][0] + 0.04;
       }
-      stations.push({ x: s.x, pts, arch: s.arch !== null });
+      // door shut lines lean: the rear cut is further forward at the sill than at the roof
+      let skew = null;
+      if (Math.abs(s.x - DOOR_REAR) < 1e-6) skew = [0, 0, 0.12, 0.12, 0.09, 0.03, 0.02, 0, 0];
+      if (Math.abs(s.x - DOOR_FRONT) < 1e-6) skew = [0, 0, -0.06, -0.06, -0.05, -0.01, 0, 0, 0];
+      stations.push({ x: s.x, pts, arch: s.arch !== null, skew });
     }
-    // drop key stations that fall strictly inside an arch (they would cut the arch)
-    const inArch = (x) => Math.abs(x - WHEELS[0].x) < ARCH_R - 1e-4 || Math.abs(x - WHEELS[2].x) < ARCH_R - 1e-4;
-    this.stations = stations.filter((s) => s.arch || !inArch(s.x));
+    this.stations = stations;
 
     const mesh = new Mesher();
     const doorMesh = [new Mesher(), new Mesher()];
-    const V = (x, p, side) => [x, p[0], p[1] * side];
+    const V = (st, k, side) => [st.x + (st.skew ? st.skew[k] : 0), st.pts[k][0], st.pts[k][1] * side];
     const ST = this.stations;
     for (let si = 0; si < ST.length - 1; si++) {
       const s0 = ST[si], s1 = ST[si + 1];
@@ -244,8 +253,8 @@ export class RoadsterModel {
         else if (k === 7) key = xm < WIN_FRONT && xm > REAR_GLASS_END ? 'glass' : 'paint';
         const door = k >= 3 && k <= 6 && xm < DOOR_FRONT && xm > DOOR_REAR;
         for (let side = 1; side >= -1; side -= 2) {
-          const a = V(s0.x, s0.pts[k], side), b = V(s0.x, s0.pts[k + 1], side);
-          const c = V(s1.x, s1.pts[k + 1], side), d = V(s1.x, s1.pts[k], side);
+          const a = V(s0, k, side), b = V(s0, k + 1, side);
+          const c = V(s1, k + 1, side), d = V(s1, k, side);
           const target = door ? doorMesh[side > 0 ? 0 : 1] : mesh;
           if (side > 0) {
             target.tri(key, a, b, c);
@@ -262,8 +271,8 @@ export class RoadsterModel {
     // End caps.
     const cap = (s, key, hint) => {
       const ring = [];
-      for (let k = 0; k < NP; k++) ring.push(V(s.x, s.pts[k], 1));
-      for (let k = NP - 2; k >= 1; k--) ring.push(V(s.x, s.pts[k], -1));
+      for (let k = 0; k < NP; k++) ring.push(V(s, k, 1));
+      for (let k = NP - 2; k >= 1; k--) ring.push(V(s, k, -1));
       let cy = 0;
       for (const p of ring) cy += p[1];
       cy /= ring.length;
@@ -285,21 +294,15 @@ export class RoadsterModel {
     const glass = add(mesh.geometry('glass'), this.mat.glass);
     glass.renderOrder = 2;
 
-    // Butterfly doors: hinged along the A-pillar, they swing up and forward.
-    const hingeOf = (side) => {
-      const s = sectionAt(DOOR_FRONT)[R];
-      return new THREE.Vector3(DOOR_FRONT, s[0], s[1] * side);
-    };
-    const wsBase = sectionAt(WIN_FRONT)[R];
-    const roofFront = sectionAt(0.2)[R];
+    // Hinge at the front of the door just under the A-pillar; the axis is mostly transverse (the
+    // door's rear edge swings up) and leans so the door also splays outward, as in the photos.
+    const hp = sectionAt(DOOR_FRONT);
     for (let i = 0; i < 2; i++) {
       const side = i === 0 ? 1 : -1;
-      const hinge = hingeOf(side);
+      const hinge = new THREE.Vector3(DOOR_FRONT - 0.02, (hp[G][0] + hp[R][0]) / 2, ((hp[G][1] + hp[R][1]) / 2) * side);
       const pivot = new THREE.Group();
       pivot.position.copy(hinge);
-      const axis = new THREE.Vector3(0.2 - WIN_FRONT, roofFront[0] - wsBase[0], (roofFront[1] - wsBase[1]) * side).normalize();
-      // tilt the axis a little outward-up so the door also flares out
-      axis.y += 0.35; axis.z += 0.22 * side; axis.normalize();
+      const axis = new THREE.Vector3(0.1, -0.28, side).normalize();
       const dm = doorMesh[i];
       const inner = new THREE.Group();
       inner.position.copy(hinge).negate();
@@ -322,7 +325,7 @@ export class RoadsterModel {
       );
       inner.add(panel);
       m.add(pivot);
-      this.doorObjs.push({ pivot, axis, sign: side });
+      this.doorObjs.push({ pivot, inner, axis, sign: -side });
     }
   }
 
@@ -360,9 +363,9 @@ export class RoadsterModel {
     this.pods = [];
     for (const side of [1, -1]) {
       const pod = new THREE.Group();
-      pod.position.set(NOSE_X - 0.06, -0.06, 0.56 * side);
-      const housing = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.05, 0.2), this.mat.gloss);
-      const lens = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.032, 0.17), this.mat.head);
+      pod.position.set(NOSE_X - 0.08, -0.05, 0.5 * side);
+      const housing = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.06, 0.24), this.mat.gloss);
+      const lens = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.045, 0.21), this.mat.head);
       lens.position.x = 0.05;
       pod.add(housing, lens);
       m.add(pod);
@@ -377,10 +380,10 @@ export class RoadsterModel {
 
     // Amber marker behind the front wheel, on the flank just under the shoulder.
     for (const side of [1, -1]) {
-      const x0 = 0.95, x1 = 0.78;
+      const x0 = 1.02, x1 = 0.87;
       const s0 = sectionAt(x0), s1 = sectionAt(x1);
-      const y0 = s0[C][0] + (s0[B][0] - s0[C][0]) * 0.55, y1 = s1[C][0] + (s1[B][0] - s1[C][0]) * 0.55;
-      const z0 = (s0[C][1] + (s0[B][1] - s0[C][1]) * 0.55 + 0.004) * side, z1 = (s1[C][1] + (s1[B][1] - s1[C][1]) * 0.55 + 0.004) * side;
+      const y0 = s0[C][0] + (s0[B][0] - s0[C][0]) * 0.6, y1 = s1[C][0] + (s1[B][0] - s1[C][0]) * 0.6;
+      const z0 = (s0[C][1] + (s0[B][1] - s0[C][1]) * 0.6 + 0.004) * side, z1 = (s1[C][1] + (s1[B][1] - s1[C][1]) * 0.6 + 0.004) * side;
       m.add(barBetween(new THREE.Vector3(x0, y0, z0), new THREE.Vector3(x1, y1, z1), 0.025, 0.01, this.mat.amber));
       // small red reflector near the tail
       const s2 = sectionAt(-1.95);
@@ -388,23 +391,27 @@ export class RoadsterModel {
         new THREE.Vector3(-2.0, s2[C][0] + 0.02, (sectionAt(-2.0)[C][1] + 0.004) * side), 0.02, 0.01, this.mat.tail));
     }
 
-    // Thin dark pillar lines over the glass.
-    const line = (pts, w = 0.014) => {
-      for (let i = 0; i < pts.length - 1; i++) m.add(barBetween(pts[i], pts[i + 1], w, w * 0.6, this.mat.black));
+    // Thin dark pillar lines over the glass (the parts on a door move with it).
+    const stAt = (x) => this.stations.find((q) => Math.abs(q.x - x) < 1e-6 && !q.arch) || { x, pts: sectionAt(x), skew: null };
+    const pt = (st, k, side, out = 1.006, dy = 0.004) =>
+      new THREE.Vector3(st.x + (st.skew ? st.skew[k] : 0), st.pts[k][0] + dy, st.pts[k][1] * side * out);
+    const line = (pts, w, parentFor) => {
+      for (let i = 0; i < pts.length - 1; i++) {
+        const xm = (pts[i].x + pts[i + 1].x) / 2;
+        (parentFor ? parentFor(xm) : m).add(barBetween(pts[i], pts[i + 1], w, w * 0.6, this.mat.black));
+      }
     };
-    for (const side of [1, -1]) {
-      const along = (k, xs, dy = 0.004) => xs.map((x) => {
-        const p = sectionAt(x)[k];
-        return new THREE.Vector3(x, p[0] + dy, p[1] * side * 1.006);
-      });
-      line(along(R, [WIN_FRONT, 0.84, 0.2, -0.28, -1.0, REAR_GLASS_END]));
-      line(along(G, [WIN_FRONT, 0.84, 0.2, -0.28, SIDE_GLASS_REAR]), 0.012);
-      // door shut lines across the side glass
+    for (let i = 0; i < 2; i++) {
+      const side = i === 0 ? 1 : -1;
+      const door = this.doorObjs[i].inner;
+      const onDoor = (xm) => (xm < DOOR_FRONT && xm > DOOR_REAR ? door : m);
+      const xsR = [WIN_FRONT, DOOR_FRONT, 0.2, DOOR_REAR, -0.65, -1.0, -1.36, REAR_GLASS_END];
+      line(xsR.map((x) => pt(stAt(x), R, side)), 0.014, onDoor);
+      line([WIN_FRONT, DOOR_FRONT, 0.2, DOOR_REAR, -0.65, SIDE_GLASS_REAR].map((x) => pt(stAt(x), G, side)), 0.012, onDoor);
+      // door shut lines
       for (const x of [DOOR_FRONT, DOOR_REAR]) {
-        const s = sectionAt(x);
-        line([new THREE.Vector3(x, s[G][0], s[G][1] * side * 1.005), new THREE.Vector3(x, s[R][0], s[R][1] * side * 1.005)], 0.012);
-        line([new THREE.Vector3(x, s[P][0], s[P][1] * side * 1.004), new THREE.Vector3(x, s[C][0], s[C][1] * side * 1.004),
-          new THREE.Vector3(x, s[B][0], s[B][1] * side * 1.004), new THREE.Vector3(x, s[G][0], s[G][1] * side * 1.004)], 0.006);
+        const st = stAt(x);
+        line([P, C, B, G, R].map((k) => pt(st, k, side, 1.004, 0)), 0.008);
       }
     }
     // windshield header bar and rear-glass end bar
@@ -429,32 +436,30 @@ export class RoadsterModel {
     band.position.set(tx - 0.006, 0.22, 0);
     m.add(band);
     const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.13),
-      new THREE.MeshStandardMaterial({ map: plateTexture(), roughness: 0.5, metalness: 0.1 }));
+      new THREE.MeshStandardMaterial({ map: plateTexture(), emissive: 0xffffff, emissiveMap: null, emissiveIntensity: 0.35, roughness: 0.5, metalness: 0.1 }));
+    plate.material.emissiveMap = plate.material.map;
     plate.position.set(tx - 0.012, 0.07, 0);
     plate.rotation.y = -PI / 2;
     m.add(plate);
     // diffuser block and fins
-    const diff = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.2, 1.62), this.mat.black);
-    diff.position.set(tx + 0.2, -0.29, 0);
-    m.add(diff);
-    for (let i = -3; i <= 3; i++) {
-      const fin = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.06, 0.012), this.mat.gloss);
-      fin.position.set(tx + 0.18, -0.4, i * 0.27 + (i === 0 ? 0 : 0));
+    for (let i = -2; i <= 2; i++) {
+      const fin = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.04, 0.012), this.mat.gloss);
+      fin.position.set(tx + 0.2, -0.395, i * 0.4);
       m.add(fin);
     }
     // four round recessed fan openings with spinning rotors inside
-    const ringGeo = new THREE.TorusGeometry(0.095, 0.014, 6, 20);
-    const wellGeo = new THREE.CylinderGeometry(0.095, 0.095, 0.12, 20, 1, true);
+    const ringGeo = new THREE.RingGeometry(0.09, 0.108, 20);
+    const wellGeo = new THREE.CylinderGeometry(0.09, 0.09, 0.12, 20, 1, true);
     wellGeo.rotateZ(PI / 2);
-    const backGeo = new THREE.CircleGeometry(0.095, 20);
+    const backGeo = new THREE.CircleGeometry(0.09, 20);
     const bladeGeo = new THREE.BoxGeometry(0.008, 0.085, 0.03);
     bladeGeo.translate(0, 0.045, 0);
     const wellMat = new THREE.MeshStandardMaterial({ color: 0x050506, roughness: 0.9, side: THREE.BackSide });
     for (const f of FANS) {
       const g = new THREE.Group();
-      g.position.set(tx - 0.012, f.y, f.z);
-      const ring = new THREE.Mesh(ringGeo, this.mat.metal);
-      ring.rotation.y = PI / 2;
+      g.position.set(tx - 0.012, -0.255, f.z); // FANS.y sits a touch low for the visible face
+      const ring = new THREE.Mesh(ringGeo, this.mat.gray);
+      ring.rotation.y = -PI / 2;
       const well = new THREE.Mesh(wellGeo, wellMat);
       well.position.x = 0.06;
       const back = new THREE.Mesh(backGeo, this.mat.black);
@@ -493,13 +498,13 @@ export class RoadsterModel {
     };
     const seatZ = variant.seats === 2 ? [-0.33, 0.33] : [0];
     for (const z of seatZ) {
-      box(0.5, 0.09, 0.48, this.mat.white, -0.25, -0.24, z, 0.06);
-      box(0.5, 0.06, 0.08, this.mat.white, -0.25, -0.17, z - 0.22, 0.06);
-      box(0.5, 0.06, 0.08, this.mat.white, -0.25, -0.17, z + 0.22, 0.06);
-      box(0.1, 0.6, 0.48, this.mat.white, -0.56, 0.03, z, -0.42);
-      box(0.06, 0.55, 0.08, this.mat.seatGray, -0.52, 0.06, z - 0.22, -0.42);
-      box(0.06, 0.55, 0.08, this.mat.seatGray, -0.52, 0.06, z + 0.22, -0.42);
-      box(0.1, 0.14, 0.26, this.mat.white, -0.67, 0.36, z, -0.42);
+      box(0.5, 0.09, 0.48, this.mat.white, -0.10, -0.24, z, 0.06);
+      box(0.5, 0.06, 0.08, this.mat.white, -0.10, -0.17, z - 0.22, 0.06);
+      box(0.5, 0.06, 0.08, this.mat.white, -0.10, -0.17, z + 0.22, 0.06);
+      box(0.1, 0.6, 0.48, this.mat.white, -0.41, 0.03, z, -0.42);
+      box(0.06, 0.55, 0.08, this.mat.seatGray, -0.37, 0.06, z - 0.22, -0.42);
+      box(0.06, 0.55, 0.08, this.mat.seatGray, -0.37, 0.06, z + 0.22, -0.42);
+      box(0.1, 0.14, 0.26, this.mat.white, -0.52, 0.36, z, -0.42);
     }
     // centre tunnel (white) between the seats
     box(1.1, 0.16, variant.seats === 2 ? 0.16 : 0.08, this.mat.white, 0.05, -0.2, variant.seats === 2 ? 0 : 0.36);
@@ -519,7 +524,7 @@ export class RoadsterModel {
     // squared yoke
     const yz = variant.seats === 2 ? -0.33 : 0;
     const yoke = new THREE.Group();
-    yoke.position.set(0.32, 0.18, yz);
+    yoke.position.set(0.36, 0.12, yz);
     yoke.rotation.z = -0.35;
     const yb = (w, h, d, x, y, z, mat = this.mat.seatGray) => {
       const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
@@ -532,7 +537,7 @@ export class RoadsterModel {
     yb(0.04, 0.24, 0.045, 0, 0.01, -0.15);
     yb(0.05, 0.1, 0.12, 0.01, 0.01, 0, this.mat.black);
     m.add(yoke);
-    box(0.24, 0.05, 0.05, this.mat.black, 0.44, 0.15, yz, -0.35);
+    box(0.24, 0.05, 0.05, this.mat.black, 0.48, 0.09, yz, -0.35);
   }
 
   // ---------------------------------------------------------------- wheels
@@ -603,7 +608,7 @@ export class RoadsterModel {
   buildWing() {
     const m = this.group;
     const deck = sectionAt(-1.92);
-    this.wingBaseY = deck[T][0] + 0.02;
+    this.wingBaseY = deck[T][0] + 0.004;
     this.wingLift = 0.5;
     const wing = new THREE.Group();
     wing.position.set(-1.92, this.wingBaseY, 0);
@@ -654,13 +659,15 @@ export class RoadsterModel {
     const throatGeo = new THREE.CircleGeometry(0.03, 12);
     throatGeo.rotateX(PI / 2);
     throatGeo.translate(0, -0.08, 0);
-    const plumeGeo = new THREE.ConeGeometry(0.06, 1, 12, 1, true);
+    const plumeGeo = new THREE.ConeGeometry(0.045, 1, 12, 1, true);
     plumeGeo.rotateX(PI); // tip at +y
     plumeGeo.translate(0, 0.5, 0);
     const bellMat = new THREE.MeshStandardMaterial({ color: 0x55595f, metalness: 0.9, roughness: 0.3, side: THREE.DoubleSide });
+    // The visible nozzle mouth sits on the body surface just outboard of the spec point.
+    this.nozzleMouth = this.nozzles.map((n) => n.pos.clone().addScaledVector(n.dir, n.group === 'rear' ? 0.06 : n.group === 'nose' ? 0.13 : 0));
     for (const n of this.nozzles) {
       const g = new THREE.Group();
-      g.position.copy(n.pos);
+      g.position.copy(this.nozzleMouth[n.id]);
       g.quaternion.setFromUnitVectors(up, n.dir);
       const bell = new THREE.Mesh(bellGeo, bellMat);
       const throat = new THREE.Mesh(throatGeo, this.mat.black);
@@ -682,7 +689,7 @@ export class RoadsterModel {
 
   nozzleWorld(n, outPos, outDir) {
     const g = this.group;
-    outPos.copy(n.pos).multiply(g.scale).applyQuaternion(g.quaternion).add(g.position);
+    outPos.copy(this.nozzleMouth[n.id] || n.pos).multiply(g.scale).applyQuaternion(g.quaternion).add(g.position);
     outDir.copy(n.dir).applyQuaternion(g.quaternion);
     return outPos;
   }
@@ -701,25 +708,29 @@ export class RoadsterModel {
     }
     // doors
     s.doors = ease(s.doors, clamp01(st.doors || 0), 3.5, dt);
-    const doorAng = s.doors * 1.75;
+    const doorAng = s.doors * 1.5;
     for (const d of this.doorObjs) d.pivot.quaternion.setFromAxisAngle(d.axis, doorAng * d.sign);
     // wing and airbrake
     s.wing = ease(s.wing, clamp01(st.wing || 0), 4, dt);
     s.airbrake = ease(s.airbrake, clamp01(st.airbrake || 0), 6, dt);
     const lift = Math.max(s.wing, s.airbrake * 0.9) * this.wingLift;
     this.wing.position.y = this.wingBaseY + lift;
-    this.wingPlate.rotation.z = -0.12 * s.wing * (1 - s.airbrake) + 1.31 * s.airbrake;
+    // at rest the plate lies on the sloping deck; raised it trims slightly nose-down; airbrake ~75 deg
+    this.wingPlate.rotation.z = (0.19 - 0.29 * s.wing) * (1 - s.airbrake) + 1.31 * s.airbrake;
     for (const sp of this.struts) {
       sp.visible = lift > 0.01;
       sp.scale.y = Math.max(0.001, lift + 0.03);
     }
     // lights
     s.lights = ease(s.lights, clamp01(st.lights || 0), 6, dt);
-    for (const p of this.pods) p.position.y = -0.06 - 0.075 * s.lights;
-    this.mat.head.emissiveIntensity = 3.5 * s.lights;
-    for (const h of this.headLights) h.intensity = 320 * s.lights;
+    // pods slide forward out of the nose and drop below the leading edge
+    for (const p of this.pods) { p.position.x = NOSE_X - 0.08 + 0.11 * s.lights; p.position.y = -0.05 - 0.06 * s.lights; }
+    this.mat.head.emissiveIntensity = 6 * s.lights;
+    this.mat.drl.emissiveIntensity = 2.2 + 2.5 * s.lights;
+    for (const h of this.headLights) h.intensity = 160 * s.lights;
     s.brake = ease(s.brake, clamp01(st.brake || 0), 18, dt);
-    this.mat.tail.emissiveIntensity = 1.6 + 0.6 * s.lights + 4.5 * s.brake;
+    const tb = Math.min(1, 0.62 + 0.08 * s.lights + 0.38 * s.brake);
+    this.mat.tail.color.setRGB(tb, 0.012 * tb, 0.03 * tb);
     // fans
     s.fans = ease(s.fans, clamp01(st.fans || 0), 5, dt);
     s.fanAngle = (s.fanAngle + dt * (4 + 70 * s.fans)) % (PI * 2);
@@ -732,9 +743,9 @@ export class RoadsterModel {
       const fx = this.nozzleFx[i];
       const target = thr ? clamp01(thr[i] || 0) : 0;
       fx.t = ease(fx.t, target, 25, dt);
-      fx.mat.opacity = 0.9 * fx.t;
+      fx.mat.opacity = 0.75 * fx.t;
       fx.plume.visible = fx.t > 0.01;
-      fx.plume.scale.set(0.7 + 0.5 * fx.t, 0.15 + 0.85 * fx.t * (0.9 + 0.1 * Math.sin(s.fanAngle * 7 + i)), 0.7 + 0.5 * fx.t);
+      fx.plume.scale.set(0.7 + 0.5 * fx.t, 0.4 * fx.t * (0.9 + 0.1 * Math.sin(s.fanAngle * 7 + i)), 0.7 + 0.5 * fx.t);
     }
   }
 }
