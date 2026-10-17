@@ -37,8 +37,10 @@ export const SEGMENTS = [
         c.throttle = v.vFwd < 16 ? 0.6 : 0; c.steer = laneSteer(v, WALL.zc);
         if (v.onWall && th > 0.5) s.ph = 'climb';
       } else if (s.ph === 'climb') {
-        c.throttle = v.vFwd < 6 ? 0.6 : 0.05;
-        if (th > 2.78) s.ph = 'stop';
+        const vT = th > 2.5 ? 2 : th > 2.2 ? 3.5 : 6;
+        c.throttle = v.vFwd < vT ? 0.6 : 0;
+        if (v.vFwd > vT + 1.5) c.brake = 0.3;
+        if (th > 2.84) s.ph = 'stop';
       } else if (s.ph === 'stop') {
         c.brake = v.vFwd > 0.3 ? 1 : 0;
         if (v.hangT > 4) s.ph = 'down';
@@ -91,7 +93,7 @@ export const SEGMENTS = [
     key: 'lineup', variant: 'rocket', spawn: 'lineup', hud: 'flight',
     replay: {
       caption: 'Kickflip replay',
-      cam: (v) => ({ shot: 'under', pos: V3(LINEUP_X + 2, 1.2, 7.5), look: V3(v.pos.x, v.pos.y, v.pos.z), fov: 50 }),
+      cam: (v) => ({ shot: 'under', pos: V3(LINEUP_X + 3, 0.6, 16), look: V3(v.pos.x, v.pos.y + 0.5, v.pos.z), fov: 46 }),
     },
     ctl(s, v, t) {
       const c = NONE();

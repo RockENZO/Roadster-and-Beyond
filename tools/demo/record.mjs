@@ -8,7 +8,7 @@ const OUT = process.argv[2];
 const MAX = +(process.argv[3] || 100000);
 fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
 const b = await chromium.launch({ executablePath: process.env.CHROME || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--no-sandbox'] });
-const p = await b.newPage({ viewport: { width: 960, height: 540 }, deviceScaleFactor: 1 });
+const p = await b.newPage({ viewport: { width: 854, height: 480 }, deviceScaleFactor: 1 });
 p.on('pageerror', (e) => console.log('PAGEERROR', e.message));
 await p.goto(process.env.URL || 'http://localhost:4173/');
 await p.waitForTimeout(1500);

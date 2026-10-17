@@ -25,14 +25,14 @@ function gauge(ctx, label, value, unit, frac) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = 'rgba(205,208,214,.9)';
-  ctx.font = `600 ${W * 0.1}px ${FONT}`;
+  ctx.font = `600 ${W * 0.12}px ${FONT}`;
   ctx.fillText(label, c, c - r * 0.56);
   ctx.fillStyle = '#ffffff';
   const big = value.length > 4 ? 0.27 : 0.32;
   ctx.font = `500 ${W * big}px ${FONT}`;
   ctx.fillText(slashZero(value), c, c + r * 0.02);
   ctx.fillStyle = 'rgba(205,208,214,.9)';
-  ctx.font = `600 ${W * 0.1}px ${FONT}`;
+  ctx.font = `600 ${W * 0.12}px ${FONT}`;
   ctx.fillText(unit, c, c + r * 0.56);
 }
 
@@ -86,14 +86,16 @@ export class BroadcastHud {
     if (!this.visible) return;
     this.setVariant(v.p);
     const alt = Math.max(0, v.pos.y - 0.48) * FT;
-    const g = Math.hypot(v.acc.x + 9.81 * v.fwd.y, v.acc.y + 9.81 * v.up.y, v.acc.z + 9.81 * v.right.y) / 9.81;
+    const gRaw = Math.hypot(v.acc.x + 9.81 * v.fwd.y, v.acc.y + 9.81 * v.up.y, v.acc.z + 9.81 * v.right.y) / 9.81;
+    this.g = (this.g ?? 1) + (Math.min(gRaw, 6) - (this.g ?? 1)) * Math.min(1, dt * 5);
+    const g = this.g;
     const pitch = Math.atan2(v.fwd.y, Math.hypot(v.fwd.x, v.fwd.z)) * 180 / Math.PI;
     const pitchDeg = v.onWall ? v.wallTh * 180 / Math.PI : Math.abs(v.up.y < 0 ? 180 - pitch : pitch);
     const wall = mode === 'wall' || (mode === 'drive' && (v.onWall || v.downforce > 1500));
     this.root.classList.toggle('wall', wall);
     if (wall) gauge(this.cA, 'DOWNFORCE', String(Math.round(v.downforce)), 'KG', v.downforce / 5000);
     else gauge(this.cA, 'G-FORCE', g.toFixed(1), 'G', g / 4);
-    const showPitch = wall || mode === 'wall';
+    const showPitch = v.onWall || mode === 'wall';
     const showSpeed = !showPitch && mode === 'drive';
     this.cB.canvas.style.display = showPitch || showSpeed ? '' : 'none';
     if (showPitch) gauge(this.cB, 'PITCH', pitchDeg >= 100 ? String(Math.round(pitchDeg)) : pitchDeg.toFixed(1), 'DEG', pitchDeg / 180);

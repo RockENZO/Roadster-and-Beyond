@@ -25,6 +25,7 @@ const ACTIONS = ['lift', 'track', 'release', 'camera', 'lights', 'doors', 'reset
 export class Input {
   constructor() {
     this.keys = new Set();
+    this.tapped = new Set();   // keys pressed since the last update, so quick taps are never missed
     this.device = 'kbd';
     this.padName = null;
     this.s = { throttle: 0, brake: 0, steer: 0, pitch: 0, roll: 0, yaw: 0, boost: false, lift: false, handbrake: false, lookX: 0, lookY: 0 };
@@ -39,6 +40,7 @@ export class Input {
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
       if (e.repeat) return;
       this.keys.add(e.code);
+      this.tapped.add(e.code);
       this.setDevice('kbd');
     });
     addEventListener('keyup', (e) => this.keys.delete(e.code));
@@ -86,8 +88,30 @@ export class Input {
     } catch (e) { /* unsupported */ }
   }
 
+  rawActions(raw, k, b, lx, ly) {
+    raw.lift = k('Space') || b(0);
+    raw.track = k('KeyT') || b(2);
+    raw.release = k('KeyF') || b(4);
+    raw.camera = k('KeyC') || k('KeyV') || b(3);
+    raw.lights = k('KeyL') || b(12);
+    raw.doors = k('KeyO') || b(13);
+    raw.prev = b(14);
+    raw.next = b(15);
+    raw.reset = k('KeyR') || b(8);
+    raw.pause = k('Escape') || k('KeyP') || b(9);
+    raw.confirm = k('Enter') || k('Space') || b(0);
+    raw.back = k('Escape') || b(1);
+    raw.left = k('ArrowLeft') || k('KeyA') || b(14) || lx < -0.6;
+    raw.right = k('ArrowRight') || k('KeyD') || b(15) || lx > 0.6;
+    raw.up = k('ArrowUp') || k('KeyW') || b(12) || ly < -0.6;
+    raw.down = k('ArrowDown') || k('KeyS') || b(13) || ly > 0.6;
+    raw.hints = k('KeyH') || b(10);
+    raw.mute = k('KeyM');
+    for (let i = 1; i <= 5; i++) raw['sp' + i] = k('Digit' + i);
+  }
+
   update(dt = 1 / 60) {
-    const k = (c) => this.keys.has(c);
+    const k = (c) => this.keys.has(c) || this.tapped.has(c);
     const g = this.pad();
     const s = this.s;
     const raw = {};
@@ -122,28 +146,17 @@ export class Input {
     s.boost = k('ShiftLeft') || k('ShiftRight') || b(5);
     s.handbrake = k('KeyB') || b(1);
 
-    raw.lift = s.lift;
-    raw.track = k('KeyT') || b(2);
-    raw.release = k('KeyF') || b(4);
-    raw.camera = k('KeyC') || k('KeyV') || b(3);
-    raw.lights = k('KeyL') || b(12);
-    raw.doors = k('KeyO') || b(13);
-    raw.prev = b(14);
-    raw.next = b(15);
-    raw.reset = k('KeyR') || b(8);
-    raw.pause = k('Escape') || k('KeyP') || b(9);
-    raw.confirm = k('Enter') || k('Space') || b(0);
-    raw.back = k('Escape') || b(1);
-    raw.left = k('ArrowLeft') || k('KeyA') || b(14) || lx < -0.6;
-    raw.right = k('ArrowRight') || k('KeyD') || b(15) || lx > 0.6;
-    raw.up = k('ArrowUp') || k('KeyW') || b(12) || ly < -0.6;
-    raw.down = k('ArrowDown') || k('KeyS') || b(13) || ly > 0.6;
-    raw.hints = k('KeyH') || b(10);
-    raw.mute = k('KeyM');
-    for (let i = 1; i <= 5; i++) raw['sp' + i] = k('Digit' + i);
+    this.rawActions(raw, k, b, lx, ly);
     for (const a of ACTIONS) {
       this.p[a] = !!raw[a] && !this.prev[a];
       this.prev[a] = !!raw[a];
+    }
+    // A tap that went down and up within one frame still counts once, then reads as released.
+    if (this.tapped.size) {
+      const held = {};
+      this.rawActions(held, (c) => this.keys.has(c), b, lx, ly);
+      for (const a of ACTIONS) this.prev[a] = !!held[a];
+      this.tapped.clear();
     }
   }
 }

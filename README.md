@@ -1,12 +1,12 @@
 # Roadster and Beyond
 
-A fan-made 3D driving and stunt game for the browser, inspired by the new Tesla Roadster as shown at its launch event (15 October 2026, US time, at SpaceX's McGregor, Texas test site). Built with three.js and Vite. Playable with a keyboard or a gamepad.
+A fan-made browser recreation of the Tesla Roadster launch night (15 October 2026, US time, at SpaceX's McGregor, Texas test site). Drive the three versions of the car, or sit back and watch the four highlight stunts replayed in Event mode with a broadcast-style overlay. Built with three.js and Vite. Playable with a keyboard or a gamepad.
 
-![Gameplay demo: 0-60 launch, the jump with a front flip, and the inverted wall ramp](docs/demo.gif)
+![Event mode: the wall climb, flight off the ramp, kickflip over the lineup and vertical jump](docs/demo.gif)
 
-*Scripted demo: a bot drives the three stunts, so the landings are cleaner than most human runs. [Higher quality MP4](docs/demo.mp4). Re-record it with [tools/demo](tools/demo).*
+*Event mode, recorded frame by frame. The car is on autopilot, but it uses the same physics and controls as a player. [Full MP4](docs/demo.mp4). Re-record it with [tools/demo](tools/demo).*
 
-This is an unofficial tribute. It is not affiliated with or endorsed by Tesla or SpaceX, and it uses no Tesla assets. Everything is drawn procedurally in code.
+This is an unofficial tribute. It is not affiliated with or endorsed by Tesla or SpaceX, uses no Tesla assets or logos, and draws everything procedurally in code.
 
 ## Play
 
@@ -16,67 +16,82 @@ npm run dev      # http://localhost:5173
 npm run build    # static site in dist/
 ```
 
-Pushing to `main` deploys to GitHub Pages through `.github/workflows/deploy.yml`. In the repository settings, set **Pages > Source** to **GitHub Actions** once.
+Pushing to `main` deploys to GitHub Pages through `.github/workflows/deploy.yml`. Add `?event` to the URL to start straight into Event mode.
 
-## What is in the game
+## What is in it
 
-- **Three versions of the car**, matching the three trims Tesla listed.
-  - **Performance**: multi-mode suction fans and Track Mode (the car drops, the wing deploys, grip and downforce rise). No thrusters.
-  - **Thrust**: rear cold-gas thrusters for a launch boost and a push in the air.
-  - **Rocket**: single seat, ten perimeter thrusters, boost, hover and attitude control.
-- **The course**: a launch strip with a 0-60 mph timer, a small kicker, a big jump over parked cars and a semi truck, and an inverted wall ramp that curves past vertical.
-- **Stunts**: flips, barrel rolls, spins and air time score points, with a bonus for a perfect landing.
-- Hidden headlights, a full-width tail light, rear diffuser fans, an auto wing, steer-by-wire styling, gold-tinted glass, cold-gas puffs and suction glow.
+**The car**, modelled from Tesla's official photos (side profile, front and rear three-quarter, head-on, interior, doors open): a low faceted fastback in satin silver with a black lower body, a bronze glass canopy that runs from the windshield to the tail, a folded nose with a full-width light line and pop-up lamps, butterfly doors, a deck wing that rises on tall struts and tilts into an airbrake, a full-width red tail bar over an RDSTR plate, four suction fans behind the diffuser, six-spoke wheels and a white two-seat (or one-seat) cabin with a squared yoke.
+
+**Three versions**, as announced:
+
+| | Performance | Thrust | Rocket |
+| --- | --- | --- | --- |
+| Suction fans | yes | yes | yes |
+| Cold-gas nozzles | none | 4 rear | 10: 4 rear, 4 lift (one behind each wheel), 2 nose |
+| Seats | 2 | 2 | 1 |
+| 0-60 mph in the game | 1.52 s | 0.84 s | 0.58 s |
+| Tesla's claim | under 1.6 s | under 0.9 s | under 0.6 s |
+
+**The physics** is a real rigid body, not an arcade model. The car has mass and inertia; four raycast wheels with springs, dampers and a slip-angle tyre model (about 1.26 g of grip on their own); fans that pull the car onto whatever surface it is on, up to 4,700 kg (the figure the broadcast's downforce gauge peaked at); aero drag and wing downforce; and every cold-gas nozzle as a separate force at its real position. The Rocket has a flight computer: stick input commands roll, pitch and yaw rates, it levels itself when you let go, and while hovering it leans against drift like a drone. This is what lets the car climb past vertical and hang upside down, and why a flip only works if you have the thrust and the height for it.
+
+**The four stunts**, in the order and with the captions of the broadcast highlights:
+
+1. **Vertical wall climb / holding upside down.** A tall, narrow ramp that curls over to 170°, about 68 ft up. Suction holds the car on the ceiling; it then reverses back down.
+2. **Flight off the ramp.** Up the same ramp and off the lip. The flight computer rolls it upright and the four lift jets hover it down into a cloud of smoke.
+3. **Kickflip over the lineup.** A thruster hop and a full roll over a Model 3, Model Y, Cybertruck, Cybercab and Semi parked side by side. Replayed in slow motion.
+4. **Vertical jump & flip.** From a standstill: lift, backflip, hover down, in front of the red pillar and the light fans. Replayed in slow motion.
+
+Event mode closes with a 0-60 run on the drag strip (the event's timed run was 0.81 s).
+
+**The broadcast overlay**, after the stream's: an arc gauge for downforce (kg) or G-force, a globe with the car inside showing its attitude, pitch in degrees, altitude in feet, and a top-down diagram that lights each nozzle as it fires. Free driving adds speed, a 0-60 timer and a score for flips, rolls, air time, clearing the lineup and the wall hang.
 
 ## Controls
 
 | Action | Keyboard | Gamepad |
 | --- | --- | --- |
-| Throttle / brake | `W` `S` | `RT` / `LT` |
+| Throttle / brake (hold brake at a stop to reverse) | `W` `S` | `RT` / `LT` |
 | Steer | `A` `D` | Left stick |
-| Thrusters (boost, hover) | `Space` | `A` or `RB` |
-| Handbrake, release from wall | `Shift` | `B` |
-| Rocket forward push (air) | `Shift` | `B` |
-| Track Mode | `T` | `X` |
-| In the air: flip / roll | `W` `S` / `A` `D` | Left stick |
-| In the air: spin | `Q` `E` | Right stick |
-| Camera (chase, wide, cockpit) | `C` | `Y` |
-| Headlights | `L` | D-pad up |
-| Respawn at last checkpoint | `R` | Back |
-| Menu / pause | `Esc` | Start |
-| Hide help | `H` | `LB` |
-| Mute | `M` | |
+| Rear thrusters | `Shift` (Thrust: also `Space`) | `RB` (Thrust: also `A`) |
+| Rocket: hop, hold to hover | `Space` | `A` |
+| Rocket hovering: climb / descend | `W` / `S` | `RT` / `LT` |
+| Rocket in the air: pitch, roll | `W` `S`, `A` `D` | Left stick |
+| Rocket in the air: yaw | `Q` `E` | Right stick |
+| Track Mode (lower, stiffer, wing up, more suction) | `T` | `X` |
+| Fans off (drop from the wall) | `F` | `LB` |
+| Handbrake | `B` | `B` |
+| Camera (chase, far, cockpit, broadcast) | `C` | `Y` |
+| Look around | | Right stick |
+| Headlights / doors | `L` / `O` | D-pad up / down |
+| Jump to a stunt | `1`-`5` | D-pad left / right |
+| Respawn | `R` | View |
+| Menu / pause / leave Event mode | `Esc` | Menu |
+| Hide help / mute | `H` / `M` | `LS` click |
 
-The menu is fully usable with a controller (D-pad or left stick to choose a car, `A` to drive). Rumble is used for landings and crashes where the browser supports it. Press any button once so the browser exposes the controller.
+Controller details: radial stick deadzones with a rescaled live zone, response curves on steering and flight inputs, trigger deadzones, speed-sensitive steering, and continuous rumble from thrust, suction and tyre slip. Pads that support trigger rumble get brake load on the left trigger and traction limit on the right. The menu works fully from the controller.
 
-Tips: take the jump at about 65 mph or more. To ride the wall, hit the mouth of the ramp fast and straight. Go slowly and suction will hold the car upside down for a moment before it rolls back down.
+Tips: take the wall at about 35 mph and keep a little throttle on; brake near the top to hang, then reverse down or press fans-off to drop. For the lineup, hop with the Rocket about 30 m before the cars at 40 mph and roll the stick.
 
-## What is sourced and what is invented
+## Sources, and what is inferred
 
-I did not watch the event. The car's look and features come from coverage of it:
+- **Tesla's official Roadster photos and reservation page** (tesla.com/roadster): body, glass, nose, tail, wheels, doors, wing and interior.
+- **The broadcast highlights clip** of all four stunts: stunt order and captions, the wall ramp's shape and height (pitch 170°, altitude about 68 ft), the 4,700 kg downforce reading, the overlay design, the four downward lift jets and the smoke on landing, the lineup and the flip stage.
+- **Press coverage** of the event for trims, the 0.81 s run, 0-60 claims, nozzle counts and the 600 L / 250 kg air load: [Fox Business](https://www.foxbusiness.com/technology/teslas-new-roadster-makes-flying-debut-hitting-60-mph-under-second), [Engadget](https://www.engadget.com/2287518/tesla-roadster-launch-live-blog/), [ExplainX](https://www.explainx.ai/blog/tesla-roadster-event-recap-everything-announced-not-announced-october-15-2026).
 
-- [Fox Business](https://www.foxbusiness.com/technology/teslas-new-roadster-makes-flying-debut-hitting-60-mph-under-second): SpaceX test site, sub-second 0-60 demo, cold-gas thrusters, ramp climb and jump, trim names, 2028 production.
-- [Engadget live blog](https://www.engadget.com/2287518/tesla-roadster-launch-live-blog/): 0.81 s run, two seats, steer-by-wire, auto-adjusting rear wing, retro 80s feel, stunts.
-- [ExplainX recap](https://www.explainx.ai/blog/tesla-roadster-event-recap-everything-announced-not-announced-october-15-2026): SR-71 and F-35 inspiration, white paint, gold-tinted windows, hidden headlights, full-length tail light, diffuser fans, per-trim 0-60 claims, Track Mode.
-
-Inferred or invented, because the coverage did not say:
-
-- Exact body proportions, surfacing and wheel design. The model is a low-poly wedge in the spirit of the description, not a replica.
-- Interior layout. The squared yoke and seat shapes are guesses.
-- All physics numbers. They are tuned so the three versions land near Tesla's claimed 0-60 times (about 1.6 s, 0.9 s and 0.6 s), not derived from real specs.
-- The course, scoring, and the idea that all trims can ride the wall.
-
-Tesla's claims are unverified by independent testing, and outlets disagreed on some details such as deposits and the exact event date.
+Inferred or invented: exact surfacing (the model is low-poly), nozzle placement on the body, all physics constants beyond the quoted figures (tuned to land on the claimed 0-60 times), the ramp's exact curve (modelled as a circle), the venue layout, a slow gas top-up between runs, and the scoring.
 
 ## Project layout
 
 ```
-src/track.js    course data shared by physics and rendering
-src/physics.js  vehicle model: ground, air, and wall-ride modes
+src/spec.js     car dimensions, wheels, nozzles, collision hull and the three versions
+src/track.js    venue layout shared by physics and rendering
+src/physics.js  rigid-body car: suspension, tyres, suction, aero, thrusters, flight computer
 src/car.js      procedural Roadster model and its animation
-src/world.js    sky, desert, runway, ramps, traffic, scenery
-src/fx.js       particle pool (cold gas, dust, smoke)
+src/world.js    night venue: wall ramp, lineup, flip stage, drag strip, lights, crowd
+src/hud.js      broadcast overlay: gauges, attitude globe, thruster map
+src/event.js    Event mode: autopilot scripts, cameras, captions, replays
 src/input.js    keyboard and Gamepad API
+src/fx.js       particles (cold gas, smoke, tyre smoke)
 src/audio.js    synthesised sound
-src/main.js     menu, HUD, scoring, camera, game loop
+src/main.js     menu, scoring, cameras, game loop
+preview/        standalone pages for checking the car and the venue
 ```

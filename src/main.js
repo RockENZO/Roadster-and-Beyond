@@ -26,6 +26,14 @@ const world = buildWorld(scene, renderer);
 renderer.toneMappingExposure = world.exposure || 1;
 const fx = new Particles(scene, 4200);
 const bhud = new BroadcastHud(renderer, scene);
+// Key light over the start line, so the car reads in the menu and at the reveal.
+{
+  const s0 = SPAWNS[0];
+  const key = new THREE.SpotLight(0xf2f5ff, 900, 40, 0.5, 0.6, 1.4);
+  key.position.set(s0.x - 3, 14, s0.z + 6);
+  key.target.position.set(s0.x, 0, s0.z);
+  scene.add(key, key.target);
+}
 const input = new Input();
 const sound = new Sound();
 const vehicle = new Vehicle();
