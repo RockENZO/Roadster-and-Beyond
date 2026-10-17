@@ -20,7 +20,7 @@ const approach = (v, t, up, back, dt) => {
   return Math.abs(t - v) <= r * dt ? t : v + Math.sign(t - v) * r * dt;
 };
 
-const ACTIONS = ['lift', 'track', 'release', 'camera', 'lights', 'doors', 'reset', 'pause', 'confirm', 'back', 'left', 'right', 'up', 'down', 'prev', 'next', 'hints', 'mute', 'sp1', 'sp2', 'sp3', 'sp4', 'sp5'];
+const ACTIONS = ['assist', 'lift', 'track', 'release', 'camera', 'lights', 'doors', 'reset', 'pause', 'confirm', 'back', 'left', 'right', 'up', 'down', 'prev', 'next', 'hints', 'mute', 'sp1', 'sp2', 'sp3', 'sp4', 'sp5'];
 
 export class Input {
   constructor() {
@@ -106,6 +106,7 @@ export class Input {
     raw.up = k('ArrowUp') || k('KeyW') || b(12) || ly < -0.6;
     raw.down = k('ArrowDown') || k('KeyS') || b(13) || ly > 0.6;
     raw.hints = k('KeyH') || b(10);
+    raw.assist = k('KeyG') || b(11);
     raw.mute = k('KeyM');
     for (let i = 1; i <= 5; i++) raw['sp' + i] = k('Digit' + i);
   }

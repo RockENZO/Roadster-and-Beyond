@@ -32,7 +32,7 @@ Pushing to `main` deploys to GitHub Pages through `.github/workflows/deploy.yml`
 | 0-60 mph in the game | 1.52 s | 0.84 s | 0.58 s |
 | Tesla's claim | under 1.6 s | under 0.9 s | under 0.6 s |
 
-**The physics** is a real rigid body, not an arcade model. The car has mass and inertia; four raycast wheels with springs, dampers and a slip-angle tyre model (about 1.26 g of grip on their own); fans that pull the car onto whatever surface it is on, up to 4,700 kg (the figure the broadcast's downforce gauge peaked at); aero drag and wing downforce; and every cold-gas nozzle as a separate force at its real position. The Rocket has a flight computer: stick input commands roll, pitch and yaw rates, it levels itself when you let go, and while hovering it leans against drift like a drone. This is what lets the car climb past vertical and hang upside down, and why a flip only works if you have the thrust and the height for it.
+**The physics** is a real rigid body, not an arcade model. The car has mass and inertia; four raycast wheels with springs, dampers and a slip-angle tyre model (about 1.26 g of grip on their own); fans that pull the car onto whatever surface it is on, up to 4,700 kg (the figure the broadcast's downforce gauge peaked at); aero drag and wing downforce; and every cold-gas nozzle as a separate force at its real position. The Rocket has a flight computer: stick input commands roll, pitch and yaw rates and, while hovering, holds the attitude you left it at. Turn on flight assist and it also levels itself when you let go and leans against drift like a drone (Event mode always flies with assist). It ignores a wheel briefly leaving the road over a bump, so it never fights your steering on the ground. This is what lets the car climb past vertical and hang upside down, and why a flip only works if you have the thrust and the height for it.
 
 **The four stunts**, in the order and with the captions of the broadcast highlights:
 
@@ -65,6 +65,7 @@ Event mode closes with a 0-60 run on the drag strip (the event's timed run was 0
 | Jump to a stunt | `1`-`5` | D-pad left / right |
 | Respawn | `R` | View |
 | Menu / pause / leave Event mode | `Esc` | Menu |
+| Flight assist (auto-level) on/off | `G` | `RS` click |
 | Hide help / mute | `H` / `M` | `LS` click |
 
 Controller details: radial stick deadzones with a rescaled live zone, response curves on steering and flight inputs, trigger deadzones, speed-sensitive steering, and continuous rumble from thrust, suction and tyre slip. Pads that support trigger rumble get brake load on the left trigger and traction limit on the right. The menu works fully from the controller.

@@ -37,6 +37,8 @@ const bhud = new BroadcastHud(renderer, scene);
 const input = new Input();
 const sound = new Sound();
 const vehicle = new Vehicle();
+// Flight assist (auto-level in the air) is off by default in free drive; Event mode always flies with it.
+try { vehicle.assist = localStorage.getItem('roadster.assist') === '1'; } catch (e) { vehicle.assist = false; }
 
 let model = null;
 let lights = true;
@@ -147,9 +149,9 @@ function renderHints() {
   if (v.key === 'rocket') {
     gas = pad
       ? `<div>${k('RB')} <b>Rear thrusters</b> &nbsp; ${k('A')} <b>Hop</b>, hold to <b>hover</b> (${k('RT')} climb, ${k('LT')} descend)</div>
-         <div>In the air: ${k('L stick')} <b>flip and roll</b>, ${k('R stick')} <b>yaw</b>. Let go and it levels itself.</div>`
+         <div>In the air: ${k('L stick')} <b>flip and roll</b>, ${k('R stick')} <b>yaw</b>. ${k('RS')} <b>Flight assist</b> (${vehicle.assist ? 'on' : 'off'}): auto-level when you let go.</div>`
       : `<div>${k('Shift')} <b>Rear thrusters</b> &nbsp; ${k('Space')} <b>Hop</b>, hold to <b>hover</b> (${k('W')} climb, ${k('S')} descend)</div>
-         <div>In the air: ${k('W')} ${k('S')} <b>flip</b>, ${k('A')} ${k('D')} <b>roll</b>, ${k('Q')} ${k('E')} <b>yaw</b>. Let go and it levels itself.</div>`;
+         <div>In the air: ${k('W')} ${k('S')} <b>flip</b>, ${k('A')} ${k('D')} <b>roll</b>, ${k('Q')} ${k('E')} <b>yaw</b>. ${k('G')} <b>Flight assist</b> (${vehicle.assist ? 'on' : 'off'}): auto-level when you let go.</div>`;
   }
   $('hints').innerHTML = pad
     ? `<div>${k('RT')} / ${k('LT')} <b>Throttle / brake</b> (hold ${k('LT')} at a stop to reverse) &nbsp; ${k('L stick')} <b>Steer</b></div>
@@ -565,6 +567,12 @@ function update(dt) {
     input.update(dt);
     P = input.p;
   }
+  if (P.assist && !show.active) {
+    vehicle.assist = !vehicle.assist;
+    try { localStorage.setItem('roadster.assist', vehicle.assist ? '1' : '0'); } catch (e) { /* private mode */ }
+    toast(vehicle.assist ? 'Flight assist on: levels itself in the air' : 'Flight assist off: full manual attitude');
+    renderHints();
+  }
   if (P.mute) { sound.muted = !sound.muted; toast(sound.muted ? 'Sound off' : 'Sound on'); }
 
   let ctrl = input.s;
@@ -599,6 +607,7 @@ function update(dt) {
     if (jump) { vehicle.respawn(jump); centerMsg(jump.label, '', 1.2); camPos.set(jump.x - 8, 2.5, jump.z); }
   }
   if (run) {
+    vehicle.autopilot = show.active;
     acc += window.__freeze ? 0 : dt;
     let first = true;
     let n = 0;

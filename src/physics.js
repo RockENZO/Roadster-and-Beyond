@@ -296,12 +296,12 @@ export class Vehicle {
       target = 0.24 * m / SUCTION_KG;
       if (this.trackMode) target = 0.5;
       if (drive > 0.5 && Math.abs(vF) < 30) target = Math.max(target, 0.44 * m / SUCTION_KG);
-      if (Math.abs(this.steer) > 0.05 && speed > 15) target = Math.max(target, 0.45);
+      if (speed > 15) target = Math.max(target, 0.45 * Math.min(1, Math.abs(this.steer) / 0.12));
       if (brake > 0.3) target = Math.max(target, 0.5);
       if (steep || this.onWall) target = 1;
     }
     this.suctionTarget = target;
-    this.suction += (target - this.suction) * Math.min(1, h * 8);
+    this.suction += (target - this.suction) * Math.min(1, h * (target > 0.9 ? 8 : 3));
     if (nc >= 2 && this.suction > 0.01) {
       this.F.addScaledVector(nAvg, -this.suction * SUCTION_KG * G);
     }
@@ -468,16 +468,19 @@ export class Vehicle {
         L = clamp(m * (G + 3 * (vyT - this.vel.y)) / Math.max(upW.y, 0.35), 0, Lmax);
         this.hovering = true;
       }
-      // Attitude: rate commands from the sticks, auto-level when they are released.
+      // Attitude: rate commands from the sticks. With flight assist on, the car levels itself when the
+      // sticks are released; with it off, it only holds its rates while hovering and otherwise coasts.
+      // The flight computer ignores a wheel briefly leaving the road over a bump.
       let cx = 0, cy = 0, cz = 0;
-      const active = airborne || this.hopT > 0;
-      if (active) {
-        const sticks = Math.abs(inp.roll) > 0.08 || Math.abs(inp.pitch) > 0.08 || Math.abs(inp.yaw) > 0.08;
+      const assist = this.assist || this.autopilot;
+      const flying = this.hopT > 0 || (airborne && (inp.lift || this.airT > 0.3));
+      const sticks = Math.abs(inp.roll) > 0.08 || Math.abs(inp.pitch) > 0.08 || Math.abs(inp.yaw) > 0.08;
+      if (flying && (sticks || assist || L > 0)) {
         if (sticks) {
           cx = inp.roll * 5.5;
           cz = -inp.pitch * 5;
           cy = -inp.yaw * 2.4;
-        } else {
+        } else if (assist) {
           // Level the car. While hovering, lean against horizontal drift like a drone (up to ~25 deg).
           const tg = _f.set(0, 1, 0);
           if (inp.lift && this.hopT <= 0) {
@@ -494,7 +497,8 @@ export class Vehicle {
           const r = Math.min(ang * 3.2, 4.2);
           cx = ex * r; cz = ez * r;
           cy = 0;
-        }
+        } // else: hold the current attitude (zero rates) while lift is firing
+
         const K = 9;
         const tx = I.x * K * (cx - w.x), ty = I.y * K * (cy - w.y), tz = I.z * K * (cz - w.z);
         // Allocate total lift L, pitch torque tz and roll torque tx across the four lift nozzles
