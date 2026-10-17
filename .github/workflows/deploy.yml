@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  # If Pages is still set to "Deploy from a branch", GitHub also publishes the raw source on every push,
+  # which overwrites the built game. Redeploy the build after that branch publish so the game always wins.
+  workflow_run:
+    workflows: [pages-build-deployment]
+    types: [completed]
 
 permissions:
   contents: read

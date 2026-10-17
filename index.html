@@ -24,7 +24,11 @@
         el.style.display = "block";
       }
       window.__fatal = show;
-      addEventListener('error', function (e) { show((e.error && e.error.stack) || e.message || 'Script failed to load'); });
+      addEventListener('error', function (e) {
+        var t = e.target;
+        if (t && t.tagName === 'SCRIPT') return show('Game script failed to load (' + t.src + '). The site may be serving the unbuilt source instead of the built game.');
+        show((e.error && e.error.stack) || e.message || 'Script failed to load');
+      }, true);
       addEventListener('unhandledrejection', function (e) { show(e.reason && (e.reason.stack || e.reason.message) || e.reason); });
       try {
         var c = document.createElement('canvas');
