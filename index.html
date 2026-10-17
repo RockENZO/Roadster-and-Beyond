@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>Roadster and Beyond</title>
+  <meta name="description" content="A fan-made 3D driving and stunt game inspired by the Tesla Roadster launch. Play with a keyboard or a gamepad." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0d10'/%3E%3Cpath d='M4 20l5-6h11l8 4v3H4z' fill='%23f2f3f5'/%3E%3Ccircle cx='10' cy='22' r='3' fill='%239fd8ff'/%3E%3Ccircle cx='23' cy='22' r='3' fill='%239fd8ff'/%3E%3C/svg%3E" />
+</head>
+<body>
+  <canvas id="c"></canvas>
+
+  <div id="hud" class="hidden">
+    <div id="speedo">
+      <div id="speed">0</div>
+      <div id="unit">MPH</div>
+      <div id="modeline"><span id="variant"></span><span id="mode"></span></div>
+      <div id="tankwrap"><span>AIR</span><div id="tankbar"><i id="tank"></i></div></div>
+    </div>
+    <div id="side">
+      <div id="t60"><span class="lbl">0 - 60</span><b id="t60v">--</b><small id="t60b"></small></div>
+      <div id="score"><span class="lbl">SCORE</span><b id="scorev">0</b></div>
+    </div>
+    <div id="popups"></div>
+    <div id="center"></div>
+    <div id="hints"></div>
+    <div id="toast"></div>
+  </div>
+
+  <div id="menu">
+    <div class="panel">
+      <div class="eyebrow">Fan-made. Not affiliated with Tesla.</div>
+      <h1>ROADSTER<br><span>AND BEYOND</span></h1>
+      <p class="lede">Drive the launch-event Roadster. Chase 0-60 times, hit the jump over the traffic, ride the inverted wall and land your flips.</p>
+      <div id="cards"></div>
+      <button id="go">Drive</button>
+      <div id="menuhint"></div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
