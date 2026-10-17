@@ -505,6 +505,8 @@ export class RoadsterModel {
       box(0.06, 0.55, 0.08, this.mat.seatGray, -0.37, 0.06, z - 0.22, -0.42);
       box(0.06, 0.55, 0.08, this.mat.seatGray, -0.37, 0.06, z + 0.22, -0.42);
       box(0.1, 0.14, 0.26, this.mat.white, -0.52, 0.36, z, -0.42);
+      box(0.02, 0.42, 0.26, this.mat.seatGray, -0.35, 0.02, z, -0.42);
+      box(0.36, 0.02, 0.26, this.mat.seatGray, -0.08, -0.19, z, 0.06);
     }
     // centre tunnel (white) between the seats
     box(1.1, 0.16, variant.seats === 2 ? 0.16 : 0.08, this.mat.white, 0.05, -0.2, variant.seats === 2 ? 0 : 0.36);
@@ -515,10 +517,10 @@ export class RoadsterModel {
     box(2.0, 0.02, 1.7, this.mat.liner, 0.0, -0.33, 0);
     // landscape screen
     const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.22),
-      new THREE.MeshStandardMaterial({ map: screenTexture(), emissive: 0xffffff, emissiveMap: screenTexture(), emissiveIntensity: 0.6, roughness: 0.2 }));
+      new THREE.MeshStandardMaterial({ map: screenTexture(), emissive: 0xffffff, emissiveMap: screenTexture(), emissiveIntensity: 1.0, roughness: 0.2 }));
     scr.position.set(0.5, 0.33, variant.seats === 2 ? 0.0 : 0.3);
-    scr.rotation.set(0, PI / 2, 0);
-    scr.rotateX(-0.2);
+    scr.rotation.set(0, -PI / 2, 0);
+    scr.rotateX(0.2);
     m.add(scr);
     box(0.02, 0.24, 0.44, this.mat.black, 0.508, 0.33, scr.position.z, -0.2);
     // squared yoke
@@ -526,6 +528,7 @@ export class RoadsterModel {
     const yoke = new THREE.Group();
     yoke.position.set(0.36, 0.12, yz);
     yoke.rotation.z = -0.35;
+    yoke.scale.setScalar(0.85);
     const yb = (w, h, d, x, y, z, mat = this.mat.seatGray) => {
       const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
       o.position.set(x, y, z);
