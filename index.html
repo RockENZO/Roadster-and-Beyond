@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <title>Roadster and Beyond</title>
-  <meta name="description" content="A fan-made 3D driving and stunt game inspired by the Tesla Roadster launch. Play with a keyboard or a gamepad." />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0d10'/%3E%3Cpath d='M4 20l5-6h11l8 4v3H4z' fill='%23f2f3f5'/%3E%3Ccircle cx='10' cy='22' r='3' fill='%239fd8ff'/%3E%3Ccircle cx='23' cy='22' r='3' fill='%239fd8ff'/%3E%3C/svg%3E" />
+  <meta name="description" content="A fan-made recreation of the Tesla Roadster launch night: the C-wall, the lineup kickflip, the standing flip and the 0-60 run. Keyboard or gamepad." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0d10'/%3E%3Cpath d='M3 20l9-6h9l8 3v4H3z' fill='%23e9ebee'/%3E%3Cpath d='M12 14l3-2h6l-1 2z' fill='%23503a28'/%3E%3Ccircle cx='9' cy='22' r='3' fill='%23111'/%3E%3Ccircle cx='24' cy='22' r='3' fill='%23111'/%3E%3C/svg%3E" />
 </head>
 <body>
   <canvas id="c"></canvas>
@@ -15,11 +15,17 @@
       <div id="speed">0</div>
       <div id="unit">MPH</div>
       <div id="modeline"><span id="variant"></span><span id="mode"></span></div>
-      <div id="tankwrap"><span>AIR</span><div id="tankbar"><i id="tank"></i></div></div>
+      <div class="gauge" id="sucwrap"><span>SUCTION</span><div class="gbar"><i id="suc"></i></div><em id="sucv">0%</em></div>
+      <div class="gauge" id="gaswrap"><span>COLD GAS</span><div class="gbar"><i id="gas"></i></div><em id="gasv">0 kg</em></div>
+    </div>
+    <div id="instr">
+      <canvas id="gmeter" width="120" height="120"></canvas>
+      <canvas id="nozmap" width="120" height="120"></canvas>
     </div>
     <div id="side">
       <div id="t60"><span class="lbl">0 - 60</span><b id="t60v">--</b><small id="t60b"></small></div>
       <div id="score"><span class="lbl">SCORE</span><b id="scorev">0</b></div>
+      <div id="stunt"><span class="lbl" id="stuntt"></span><p id="stuntd"></p></div>
     </div>
     <div id="popups"></div>
     <div id="center"></div>
@@ -27,13 +33,20 @@
     <div id="toast"></div>
   </div>
 
+  <div id="show" class="hidden">
+    <div class="bar top"></div><div class="bar bot"></div>
+    <div id="showcard"><div id="showk"></div><div id="showt"></div><div id="shows"></div></div>
+    <div id="count"></div>
+    <div id="showhint">Press <kbd>Esc</kbd> / <kbd>Menu</kbd> to take the wheel</div>
+  </div>
+
   <div id="menu">
     <div class="panel">
-      <div class="eyebrow">Fan-made. Not affiliated with Tesla.</div>
+      <div class="eyebrow">Fan-made. Not affiliated with Tesla or SpaceX.</div>
       <h1>ROADSTER<br><span>AND BEYOND</span></h1>
-      <p class="lede">Drive the launch-event Roadster. Chase 0-60 times, hit the jump over the traffic, ride the inverted wall and land your flips.</p>
+      <p class="lede">Launch night at McGregor, rebuilt. Hang upside down from the C-wall, kickflip the lineup, backflip from a standstill and chase the 0-60 time.</p>
       <div id="cards"></div>
-      <button id="go">Drive</button>
+      <div class="btns"><button id="go">Drive</button><button id="watch">Watch the event</button></div>
       <div id="menuhint"></div>
     </div>
   </div>

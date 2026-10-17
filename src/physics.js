@@ -1,426 +1,606 @@
 import * as THREE from 'three';
-import { G, BOUNDS, RAMPS, OBSTACLES, WALL, SPAWNS, groundH, groundN, wallSurfaceY, inWallFootprint } from './track.js';
+import { G, BOUNDS, BOXES, WALL, SPAWNS } from './track.js';
+import { SUSP, WHEELS, HULL, VARIANTS } from './spec.js';
 
-const MPH = 2.23694;
+export { VARIANTS };
+export const MPH = 2.23694;
 
-// a0: tyre-limited acceleration (m/s^2). boost: extra push from the cold-gas thrusters.
-// 0-60 mph is 26.8 m/s, so a0 17.5 gives ~1.5 s, +15 gives ~0.83 s, +30 on the Rocket gives ~0.55 s,
-// the same ballpark as the numbers Tesla quoted for the three versions.
-export const VARIANTS = {
-  performance: {
-    key: 'performance', name: 'Performance', tag: 'Multi-mode suction fans. Track Mode wings.',
-    a0: 18.2, boost: 0, vmax: 106, tank: 0, drain: 0, regen: 0, airControl: 0.3, seats: 2,
-    claim: '0-60 under 1.6 s',
-  },
-  thrust: {
-    key: 'thrust', name: 'Thrust', tag: 'Rear cold-gas thrusters from SpaceX tech.',
-    a0: 17.5, boost: 15, vmax: 112, tank: 100, drain: 26, regen: 9, airControl: 0.7, seats: 2,
-    claim: '0-60 under 0.9 s',
-  },
-  rocket: {
-    key: 'rocket', name: 'Rocket', tag: 'Ten perimeter thrusters. One seat. Flight system.',
-    a0: 19, boost: 30, vmax: 125, tank: 140, drain: 30, regen: 10, airControl: 1.0, seats: 1,
-    claim: '0-60 under 0.6 s',
-  },
-};
+// Rigid-body Roadster: six degrees of freedom, four raycast wheels with springs and tyre
+// models, fan suction, aero, cold-gas thrusters and (on the Rocket) a flight computer that
+// fires them to hold an attitude. Everything runs at 240 Hz in substeps.
+
+const SUB = 2;            // substeps per game step (game steps at 120 Hz)
+const MU = 1.26;          // tyre friction: launch coverage quoted ~1.26 g from tyres alone
+const SUCTION_G = 2;      // fans: up to 2 g of suction
+const POWER = 1.0e6;      // ~1 MW
+const VMAX = 104;         // ~232 mph governor
+const G0 = 9.80665;
+const RHO = 1.2;
+const CDA = 0.55;
 
 const V = () => new THREE.Vector3();
-const _a = V(), _b = V(), _c = V(), _n = V(), _m = new THREE.Matrix4(), _q = new THREE.Quaternion();
-const WHEEL_PTS = [[1.32, -0.5, 0.88], [1.32, -0.5, -0.88], [-1.32, -0.5, 0.88], [-1.32, -0.5, -0.88]].map((p) => new THREE.Vector3(...p));
-const ROOF_PTS = [[0.1, 0.62, 0], [-0.7, 0.58, 0.5], [-0.7, 0.58, -0.5]].map((p) => new THREE.Vector3(...p));
-const COM_H = 0.5;
+const _a = V(), _b = V(), _c = V(), _d = V(), _e = V(), _f = V(), _n = V(), _r = V(), _vp = V(), _t = V(), _s = V();
+const _q = new THREE.Quaternion(), _qi = new THREE.Quaternion();
+const WORLD_UP = new THREE.Vector3(0, 1, 0);
+const clamp = THREE.MathUtils.clamp;
 
+// ---------- World queries ----------
+// Each returns a surface tag ('ground' | 'wall' | 'box') or null, and writes the normal into outN.
+const hitInfo = { t: 0, tag: null, box: null };
+
+function raycast(o, d, maxT, outN) {
+  let best = maxT;
+  let tag = null;
+  hitInfo.box = null;
+  // Flat ground.
+  if (d.y < -1e-6) {
+    const t = -o.y / d.y;
+    if (t >= 0 && t < best) { best = t; tag = 'ground'; outN.set(0, 1, 0); }
+  }
+  // Inside of the C-wall.
+  const dz0 = o.z - WALL.zc;
+  if (Math.abs(dz0) < WALL.hw + 3) {
+    const px = o.x - WALL.x0, py = o.y - WALL.R;
+    const cc = px * px + py * py - WALL.R * WALL.R;
+    const a = d.x * d.x + d.y * d.y;
+    if (cc < 0 && a > 1e-8) {
+      const b = 2 * (px * d.x + py * d.y);
+      const t = (-b + Math.sqrt(b * b - 4 * a * cc)) / (2 * a);
+      if (t >= 0 && t < best) {
+        const hx = px + t * d.x, hy = py + t * d.y, hz = dz0 + t * d.z;
+        const th = Math.atan2(hx, -hy);
+        if (th >= 0 && th <= WALL.thetaMax && Math.abs(hz) <= WALL.hw) {
+          best = t; tag = 'wall';
+          outN.set(-hx / WALL.R, -hy / WALL.R, 0);
+        }
+      }
+    }
+  }
+  // Tops and sides of the parked vehicles.
+  for (const bx of BOXES) {
+    let t0 = 0, t1 = best, ax = -1, sg = 0;
+    const lo = [bx.x0, bx.y0, bx.z0], hi = [bx.x1, bx.y1, bx.z1], oo = [o.x, o.y, o.z], dd = [d.x, d.y, d.z];
+    let ok = true;
+    for (let k = 0; k < 3 && ok; k++) {
+      if (Math.abs(dd[k]) < 1e-9) { if (oo[k] < lo[k] || oo[k] > hi[k]) ok = false; continue; }
+      let ta = (lo[k] - oo[k]) / dd[k], tb = (hi[k] - oo[k]) / dd[k];
+      let s = -1;
+      if (ta > tb) { const tmp = ta; ta = tb; tb = tmp; s = 1; }
+      if (ta > t0) { t0 = ta; ax = k; sg = s; }
+      if (tb < t1) t1 = tb;
+      if (t0 > t1) ok = false;
+    }
+    if (ok && ax >= 0 && t0 < best) {
+      best = t0; tag = 'box'; hitInfo.box = bx;
+      outN.set(0, 0, 0).setComponent(ax, sg);
+    }
+  }
+  hitInfo.t = best;
+  hitInfo.tag = tag;
+  return tag;
+}
+
+// Penetration of a point into anything solid. Returns depth (0 if free) and writes the push-out normal.
+const penInfo = { tag: null, box: null };
+function penetrate(p, outN) {
+  let depth = 0;
+  penInfo.tag = null; penInfo.box = null;
+  if (p.y < 0) { depth = -p.y; outN.set(0, 1, 0); penInfo.tag = 'ground'; }
+  // C-wall structure: a box with the drive-surface cylinder cut out of it.
+  const dz = p.z - WALL.zc;
+  const side = WALL.hw + 0.35;
+  const top = 2 * WALL.R + WALL.thick;
+  const xr = WALL.x0 + WALL.R + WALL.thick;
+  if (Math.abs(dz) < side && p.x > WALL.x0 && p.x < xr && p.y > 0 && p.y < top) {
+    const hx = p.x - WALL.x0, hy = p.y - WALL.R;
+    const r = Math.hypot(hx, hy);
+    const inner = Math.abs(dz) < WALL.hw;
+    if (!(inner && r < WALL.R)) {
+      // candidates: exit through the cylinder (inner slab), or through the box faces
+      let best = Infinity;
+      if (inner) { best = r - WALL.R; _t.set(-hx / r, -hy / r, 0); }
+      const faces = [
+        [p.x - WALL.x0, -1, 0, 0], [xr - p.x, 1, 0, 0], [top - p.y, 0, 1, 0], [side - Math.abs(dz), 0, 0, Math.sign(dz) || 1],
+      ];
+      for (const f of faces) if (f[0] < best) { best = f[0]; _t.set(f[1], f[2], f[3]); }
+      if (best > depth) { depth = best; outN.copy(_t); penInfo.tag = 'wall'; }
+    }
+  }
+  for (const bx of BOXES) {
+    if (p.x <= bx.x0 || p.x >= bx.x1 || p.y <= bx.y0 || p.y >= bx.y1 || p.z <= bx.z0 || p.z >= bx.z1) continue;
+    const faces = [[p.x - bx.x0, -1, 0, 0], [bx.x1 - p.x, 1, 0, 0], [bx.y1 - p.y, 0, 1, 0], [p.z - bx.z0, 0, 0, -1], [bx.z1 - p.z, 0, 0, 1]];
+    let best = Infinity;
+    for (const f of faces) if (f[0] < best) { best = f[0]; _t.set(f[1], f[2], f[3]); }
+    if (best > depth) { depth = best; outN.copy(_t); penInfo.tag = 'box'; penInfo.box = bx; }
+  }
+  return depth;
+}
+
+export function wallTheta(p) {
+  return Math.atan2(p.x - WALL.x0, -(p.y - WALL.R));
+}
+
+// ---------- Vehicle ----------
 export class Vehicle {
   constructor() {
-    this.pos = V();          // centre of mass, world
-    this.vel = V();          // world
+    this.pos = V();
+    this.vel = V();
     this.q = new THREE.Quaternion();
-    this.w = V();            // angular velocity, body frame
-    this.gp = V();           // ground contact point (ground mode)
-    this.upSm = new THREE.Vector3(0, 1, 0);
-    this.fwd = new THREE.Vector3(1, 0, 0);
-    this.up = new THREE.Vector3(0, 1, 0);
+    this.w = V();                 // angular velocity, body frame
+    this.fwd = V(); this.up = V(); this.right = V();
+    this.F = V(); this.T = V();   // force / torque accumulators (world)
+    this.acc = V();               // smoothed acceleration (body frame) for the G meter
+    this.lastVel = V();
+    this.wheels = WHEELS.map((w) => ({
+      ...w, anchor: new THREE.Vector3(w.x, SUSP.anchorY, w.z), contact: false, comp: 0, y: SUSP.anchorY - SUSP.rest,
+      spin: 0, steer: 0, n: V(), cp: V(), tag: null, slip: 0, load: 0,
+    }));
+    this.events = [];
     this.set('performance');
   }
 
   set(key) {
-    this.p = VARIANTS[key];
-    this.tank = this.p.tank;
-    this.respawn(0);
+    const p = VARIANTS[key];
+    this.p = p;
+    this.mass = p.mass;
+    this.I = new THREE.Vector3(...p.inertia);
+    this.nozzleU = new Float32Array(p.nozzles.length);
+    this.spawn = SPAWNS[0];
+    this.respawn(SPAWNS[0]);
   }
 
-  respawn(x = this.pos.x) {
-    let sp = SPAWNS[0];
-    for (const s of SPAWNS) if (s.x <= x + 1) sp = s;
-    this.mode = 'ground';
-    this.psi = 0;
-    this.gp.set(sp.x, 0, 0);
+  respawn(sp = this.spawn) {
+    if (typeof sp === 'string') sp = SPAWNS.find((s) => s.key === sp) || SPAWNS[0];
+    this.spawn = sp;
+    this.mode = 'drive';
+    this.pos.set(sp.x, 0.5, sp.z);
+    this.q.setFromAxisAngle(WORLD_UP, sp.yaw || 0);
     this.vel.set(0, 0, 0);
-    this.vyG = 0;
-    this.upSm.set(0, 1, 0);
+    this.lastVel.set(0, 0, 0);
     this.w.set(0, 0, 0);
-    this.trackMode = false;
+    this.acc.set(0, 0, 0);
+    for (const w of this.wheels) { w.contact = false; w.comp = 0.06; w.steer = 0; w.slip = 0; w.load = 0; }
+    this.gas = this.p.gas;
+    this.nozzleU.fill(0);
+    this.steer = 0;
+    this.trackMode = this.trackMode || false;
+    this.releaseT = 0;
+    this.revT = 0;
+    this.hopT = 0;
+    this.suction = 0;
+    this.suctionTarget = 0;
+    this.braking = false;
+    this.airbrake = 0;
     this.boosting = false;
     this.hovering = false;
-    this.braking = false;
-    this.steerVis = 0;
-    this.slip = 0;
-    this.crashT = 0;
+    this.airborne = false;
+    this.airT = 0;
+    this.groundT = 1;
     this.air = null;
-    this.wall = null;
-    this.wallRide = 0;
-    this.tank = this.p.tank;
+    this.onWall = false;
+    this.wallTh = 0;
+    this.wallMax = 0;
+    this.hangT = 0;
+    this.hung = false;
+    this.crashT = 0;
+    this.tipT = 0;
+    this.contacts = 0;
     this.t60 = { state: 'idle', t: 0, result: this.t60 ? this.t60.result : null };
-    this.events = [];
-    this.syncFromGround(1);
-    this.lastSpawn = sp;
+    this.basis();
+    this.settle();
   }
 
-  get speed() { return Math.hypot(this.vel.x, this.vel.z); }
-  get mph() { return this.mode === 'wall' ? this.wall.v * MPH : this.vel.length() * MPH; }
+  // Drop the car onto its wheels at the spawn so it starts at rest.
+  settle() {
+    const save = this.events;
+    this.events = [];
+    for (let i = 0; i < 240; i++) this.substep(1 / 240, NOINPUT);
+    this.vel.set(0, 0, 0); this.w.set(0, 0, 0);
+    this.events = save;
+    this.events.length = 0;
+    this.airborne = false; this.air = null; this.airT = 0;
+    if (this.t60) this.t60.state = 'idle';
+  }
+
+  get mph() { return this.vel.length() * MPH; }
+  get vFwd() { return this.vel.dot(this.fwd); }
 
   basis() {
     this.fwd.set(1, 0, 0).applyQuaternion(this.q);
     this.up.set(0, 1, 0).applyQuaternion(this.q);
+    this.right.set(0, 0, 1).applyQuaternion(this.q);
   }
 
-  syncFromGround(snap) {
-    const f = _a.set(Math.cos(this.psi), 0, -Math.sin(this.psi));
-    const n = this.upSm;
-    f.addScaledVector(n, -f.dot(n)).normalize();
-    const r = _b.crossVectors(f, n).normalize();
-    _m.makeBasis(f, n, r);
-    _q.setFromRotationMatrix(_m);
-    if (snap) this.q.copy(_q); else this.q.slerp(_q, 0.35);
-    this.basis();
-    this.pos.copy(this.gp).addScaledVector(this.up, COM_H);
+  // world-space point from a body-frame point
+  toWorld(lp, out) { return out.copy(lp).applyQuaternion(this.q).add(this.pos); }
+
+  addForceAt(F, at) {
+    this.F.add(F);
+    _r.subVectors(at, this.pos);
+    this.T.add(_s.crossVectors(_r, F));
+  }
+
+  // velocity of a world point on the body
+  pointVel(at, out) {
+    _r.subVectors(at, this.pos);
+    _e.copy(this.w).applyQuaternion(this.q);
+    return out.crossVectors(_e, _r).add(this.vel);
   }
 
   crash(reason) {
     if (this.mode === 'crashed') return;
-    this.events.push({ type: 'crash', reason, pos: this.pos.clone(), speed: this.vel.length() });
     this.mode = 'crashed';
-    this.crashT = 1.9;
-    this.boosting = false;
-    this.air = null;
+    this.crashT = 2.2;
+    this.events.push({ type: 'crash', reason, pos: this.pos.clone(), speed: this.vel.length() });
   }
 
   step(dt, inp, pressed) {
     this.events.length = 0;
+    if (this.mode !== 'crashed') {
+      if (pressed.track) { this.trackMode = !this.trackMode; this.events.push({ type: 'track', on: this.trackMode }); }
+      if (pressed.release) { this.releaseT = 1.2; this.events.push({ type: 'fans-off' }); }
+      if (pressed.lift && this.p.fLift && !this.airborne && this.gas > 5) { this.hopT = 0.6; this.hopAge = 0; this.events.push({ type: 'hop' }); }
+      // A tap is a short hop; holding the button stretches it to full height.
+      if (this.hopT > 0 && !inp.lift && this.hopAge > 0.3) this.hopT = 0;
+    }
+    const ctl = this.mode === 'crashed' ? NOINPUT : inp;
+    const h = dt / SUB;
+    for (let i = 0; i < SUB; i++) this.substep(h, ctl);
+    this.track(dt, ctl);
+    if (this.mode === 'crashed') {
+      this.crashT -= dt;
+      if (this.crashT <= 0) {
+        let best = SPAWNS[0], bd = Infinity;
+        for (const s of SPAWNS) {
+          const d = Math.hypot(s.x - this.pos.x, s.z - this.pos.z);
+          if (d < bd) { bd = d; best = s; }
+        }
+        this.respawn(best);
+        this.events.push({ type: 'respawn', label: best.label });
+      }
+    }
+  }
+
+  substep(h, inp) {
+    const p = this.p;
+    const m = this.mass;
+    this.basis();
+    this.F.set(0, -m * G, 0);
+    this.T.set(0, 0, 0);
+    const speed = this.vel.length();
+    const vF = this.vel.dot(this.fwd);
+
+    // ---- Driver demand ----
+    let drive = 0;      // 0..1 forward, negative = reverse
+    let brake = 0;
+    this.braking = false;
+    if (inp.throttle > 0.02) drive = inp.throttle;
+    // Brake to a stop and hold; keep holding the brake at a standstill to engage reverse.
+    if (inp.brake > 0.02 && inp.throttle < 0.02 && Math.abs(vF) < 0.8) this.revT += h; else if (vF > 0.8 || inp.brake < 0.02) this.revT = 0;
+    if (inp.brake > 0.02) {
+      if (this.revT > 0.35 && inp.throttle < 0.02) drive = -inp.brake;
+      else { brake = inp.brake; this.braking = vF > 0.8; }
+    }
+    const steerMax = 0.6 / (1 + Math.pow(Math.abs(vF) / 18, 1.4)) + 0.035;
+    const steerT = -inp.steer * steerMax;    // positive = left
+    this.steer += clamp(steerT - this.steer, -3 * h, 3 * h);
+
+    // ---- Suction fans ----
+    const nAvg = _n.set(0, 0, 0);
+    let nc = 0;
+    for (const w of this.wheels) if (w.contact) { nAvg.add(w.n); nc++; }
+    if (nc) nAvg.normalize();
+    const steep = nc ? nAvg.y < 0.6 : false;
+    let target = 0;
+    if (nc >= 2 && this.releaseT <= 0) {
+      target = 0.12;
+      if (this.trackMode) target = 0.6;
+      if (drive > 0.5 && Math.abs(vF) < 30) target = Math.max(target, 0.22);
+      if (Math.abs(this.steer) > 0.05 && speed > 15) target = Math.max(target, 0.45);
+      if (brake > 0.3) target = Math.max(target, 0.5);
+      if (steep || this.onWall) target = 1;
+    }
+    this.suctionTarget = target;
+    this.suction += (target - this.suction) * Math.min(1, h * 8);
+    if (nc >= 2 && this.suction > 0.01) {
+      this.F.addScaledVector(nAvg, -this.suction * SUCTION_G * m * G);
+    }
+
+    // ---- Aero ----
+    const wingUp = this.trackMode || speed > 50 || this.braking;
+    this.wingUp = wingUp;
+    this.airbrake += ((this.braking && speed > 25 && brake > 0.5 ? 1 : 0) - this.airbrake) * Math.min(1, h * 6);
+    const cda = CDA + 0.7 * this.airbrake;
+    if (speed > 0.1) this.F.addScaledVector(this.vel, -0.5 * RHO * cda * speed);
+    if (this.contacts && vF > 0) this.F.addScaledVector(this.up, -0.5 * RHO * (wingUp ? 1.4 : 0.35) * vF * vF);
+
+    // ---- Wheels ----
+    const k = SUSP.k * (1 + this.suction * 1.4) * (this.trackMode ? 1.4 : 1);
+    const maxT = SUSP.rest + SUSP.radius;
+    let contacts = 0;
+    const totalDrive = drive > 0
+      ? drive * Math.min(m * 30, POWER / Math.max(Math.abs(vF), 1)) * (vF > VMAX ? 0 : 1)
+      : drive * m * 8 * (vF < -14 ? 0 : 1);
+    for (let i = 0; i < 4; i++) {
+      const w = this.wheels[i];
+      const a = this.toWorld(w.anchor, _a);
+      const dir = _b.copy(this.up).negate();
+      const tag = raycast(a, dir, maxT, w.n);
+      const was = w.contact;
+      if (!tag) {
+        w.contact = false;
+        w.comp = 0;
+        w.load = 0;
+        w.y = SUSP.anchorY - SUSP.rest;
+        w.spin += (drive * 30 - 0) * h * (drive ? 1 : 0);
+        continue;
+      }
+      contacts++;
+      w.contact = true;
+      w.tag = tag;
+      const comp = maxT - hitInfo.t;
+      const compVel = was ? (comp - w.comp) / h : 0;
+      w.comp = comp;
+      w.y = SUSP.anchorY - (hitInfo.t - SUSP.radius);
+      let Fs = k * comp + SUSP.c * compVel;
+      if (comp > SUSP.rest * 0.92) Fs += 4e5 * (comp - SUSP.rest * 0.92); // bump stop
+      Fs = Math.max(0, Fs);
+      const cp = w.cp.copy(a).addScaledVector(dir, hitInfo.t);
+      const n = w.n;
+      // Load on the tyre: suspension force projected on the contact normal.
+      const N = Fs * Math.max(0.2, this.up.dot(n));
+      w.load = N;
+      // Tyre axes in the contact plane.
+      const steer = w.front ? this.steer : 0;
+      w.steer = steer;
+      const fw = _c.copy(this.fwd);
+      if (steer) fw.applyAxisAngle(this.up, steer);
+      fw.addScaledVector(n, -fw.dot(n)).normalize();
+      const lat = _d.crossVectors(fw, n);
+      const vp = this.pointVel(cp, _vp);
+      const vLong = vp.dot(fw), vLat = vp.dot(lat);
+      const mu = MU * (inp.handbrake && !w.front ? 0.55 : 1);
+      const muN = mu * N;
+      // longitudinal
+      let Fx = totalDrive * (w.front ? 0.35 : 0.65) / 2;
+      let bq = brake * muN * 1.05;
+      if (inp.handbrake && !w.front) bq = Math.max(bq, muN * 0.9);
+      const hold = Math.abs(drive) < 0.02 && (Math.abs(vLong) < 0.8 || brake > 0);
+      if (hold) bq = Math.max(bq, muN * 0.9);
+      if (bq > 0) Fx -= clamp(vLong * 9000, -bq, bq);
+      Fx -= 0.012 * N * Math.sign(vLong) * Math.min(1, Math.abs(vLong));
+      // lateral (slip-angle model, saturating)
+      const lsc = Math.max(0.15 * Math.abs(vLong), 0.5);
+      let Fy = -muN * Math.tanh(1.6 * vLat / lsc);
+      // friction circle
+      const Ft = Math.hypot(Fx, Fy);
+      if (Ft > muN && Ft > 0) { const s = muN / Ft; Fx *= s; Fy *= s; }
+      w.slip = vLat;
+      _f.copy(n).multiplyScalar(Fs).addScaledVector(fw, Fx).addScaledVector(lat, Fy);
+      this.addForceAt(_f, cp);
+      w.spin += (vLong / SUSP.radius) * h;
+    }
+    this.contacts = contacts;
+
+    // ---- Thrusters ----
     this.boosting = false;
     this.hovering = false;
-    if (pressed.track) this.trackMode = !this.trackMode;
-    switch (this.mode) {
-      case 'ground': this.stepGround(dt, inp); break;
-      case 'air': this.stepAir(dt, inp); break;
-      case 'wall': this.stepWall(dt, inp, pressed); break;
-      case 'crashed': this.stepCrashed(dt); break;
+    this.nozzleU.fill(0);
+    if (this.gas > 0 && p.nozzles.length) this.thrusters(h, inp, nc ? nAvg : null);
+
+    // ---- Body contacts ----
+    let roof = false, hard = 0, hardTag = null, hardBox = null, hardSide = false, side = false;
+    for (const hp of HULL) {
+      const at = this.toWorld(hp.p, _a);
+      const d = penetrate(at, _c);
+      if (d <= 0) continue;
+      const vp = this.pointVel(at, _vp);
+      const vn = vp.dot(_c);
+      if (hp.roof) roof = true;
+      if (Math.abs(hp.p.z) > 0.9) side = true;
+      if (-vn > hard) { hard = -vn; hardTag = penInfo.tag; hardBox = penInfo.box; hardSide = Math.abs(_c.y) < 0.5; }
+      const Fn = Math.max(0, 3e5 * Math.min(d, 0.3) - 2.2e4 * vn);
+      _f.copy(_c).multiplyScalar(Fn);
+      _t.copy(vp).addScaledVector(_c, -vn);
+      const vt = _t.length();
+      if (vt > 1e-3) _f.addScaledVector(_t, -Math.min(0.5 * Fn / vt, 6000));
+      this.addForceAt(_f, at);
     }
-    if (this.p.tank && !this.boosting && this.mode !== 'crashed') {
-      this.tank = Math.min(this.p.tank, this.tank + this.p.regen * (this.mode === 'ground' ? 1 : 0.35) * dt);
+    if (this.mode === 'drive') {
+      if (roof) this.crash(this.onWall ? 'Fell off the wall' : 'Rolled onto the roof');
+      else if (hard > 11 || (hardSide && hardTag === 'box' && hard > 5) || (hardSide && hardTag === 'wall' && hard > 7)) {
+        this.crash(hardTag === 'box' ? `Hit the ${hardBox.car.name}` : hardTag === 'wall' ? 'Hit the C-wall structure' : 'Hit the ground too hard');
+      }
+      if (side && contacts < 2 && speed < 2) this.tipT += h; else this.tipT = 0;
+      if (this.tipT > 1.5) this.crash('Tipped over');
     }
-    this.basis();
+
+    // ---- World bounds ----
+    if (this.pos.x < BOUNDS.x0 || this.pos.x > BOUNDS.x1) { this.F.x += (this.pos.x < BOUNDS.x0 ? 1 : -1) * m * 30; this.vel.x *= 0.98; }
+    if (this.pos.z < BOUNDS.z0 || this.pos.z > BOUNDS.z1) { this.F.z += (this.pos.z < BOUNDS.z0 ? 1 : -1) * m * 30; this.vel.z *= 0.98; }
+
+    // ---- Integrate ----
+    this.vel.addScaledVector(this.F, h / m);
+    const Tb = _t.copy(this.T).applyQuaternion(_qi.copy(this.q).invert());
+    const w = this.w, I = this.I;
+    // Euler's equations: I dw/dt = T - w x (I w)
+    const ix = I.x * w.x, iy = I.y * w.y, iz = I.z * w.z;
+    const gx = w.y * iz - w.z * iy, gy = w.z * ix - w.x * iz, gz = w.x * iy - w.y * ix;
+    w.x += (Tb.x - gx) / I.x * h;
+    w.y += (Tb.y - gy) / I.y * h;
+    w.z += (Tb.z - gz) / I.z * h;
+    if (!contacts) w.multiplyScalar(1 - 0.08 * h);
+    this.pos.addScaledVector(this.vel, h);
+    const rate = w.length();
+    if (rate > 1e-7) {
+      _q.setFromAxisAngle(_a.copy(w).divideScalar(rate), rate * h);
+      this.q.multiply(_q).normalize();
+    }
+    this.releaseT = Math.max(0, this.releaseT - h);
+    this.hopT = Math.max(0, this.hopT - h);
+    this.hopAge = (this.hopAge || 0) + h;
   }
 
-  stepCrashed(dt) {
-    this.crashT -= dt;
-    this.vel.multiplyScalar(Math.exp(-3 * dt));
-    this.vel.y -= G * dt;
-    this.pos.addScaledVector(this.vel, dt);
-    const h = groundH(this.pos.x, this.pos.z) + 0.3;
-    if (this.pos.y < h) { this.pos.y = h; this.vel.y = 0; }
-    this.q.multiply(_q.setFromAxisAngle(_a.set(0.4, 0.2, 1).normalize(), 0.6 * dt * Math.max(0, this.crashT)));
-    if (this.crashT <= 0) {
-      this.events.push({ type: 'respawn' });
-      this.respawn(this.pos.x);
-    }
-  }
-
-  stepGround(dt, inp) {
+  // Cold-gas thrusters. Rear nozzles push the car forward; on the Rocket a flight computer
+  // fires the four lift nozzles and the two nose nozzles to hop, hover and hold or change attitude.
+  thrusters(h, inp, nAvg) {
     const p = this.p;
-    const gp = this.gp;
-    const fwd = _a.set(Math.cos(this.psi), 0, -Math.sin(this.psi));
-    const right = _b.set(Math.sin(this.psi), 0, Math.cos(this.psi));
-    let vF = this.vel.dot(fwd);
-    let vL = this.vel.dot(right);
-    const speed = Math.abs(vF);
-    const sp = Math.min(Math.max(vF, 0) / p.vmax, 1);
-
-    let a = 0;
-    if (inp.throttle > 0.02) {
-      if (vF < -0.5) a += 40 * inp.throttle;
-      else a += p.a0 * (1 - sp * sp) * inp.throttle * (this.trackMode ? 1.04 : 1);
-    }
-    this.braking = false;
-    if (inp.brake > 0.02) {
-      if (vF > 0.8) { a -= 42 * inp.brake; this.braking = true; }
-      else if (vF > -14) a -= 12 * inp.brake;
-    }
-    if (inp.thrust && p.boost > 0 && this.tank > 1) {
-      a += p.boost * (1 - sp * sp * 0.5);
-      this.tank = Math.max(0, this.tank - p.drain * dt);
+    const m = this.mass;
+    const u = this.nozzleU;
+    const airborne = this.contacts === 0;
+    const boost = !!inp.boost || (p.key === 'thrust' && !!inp.lift);
+    if (boost && p.fRear) {
+      for (const n of p.nozzles) if (n.group === 'rear') u[n.id] = 1;
       this.boosting = true;
     }
-    if (inp.handbrake) a -= 12 * Math.sign(vF);
-    a -= 0.00022 * vF * Math.abs(vF) + (Math.abs(vF) > 0.3 ? 0.6 * Math.sign(vF) : 0);
-    const before = vF;
-    vF += a * dt;
-    if (inp.throttle < 0.02 && inp.brake < 0.02 && !this.boosting && Math.sign(before) !== Math.sign(vF) && Math.abs(before) < 1.5) vF = 0;
-    if (inp.brake > 0.02 && inp.throttle < 0.02 && before > 0 && vF < 0) vF = 0;
-
-    // Steering: limited by tyre grip (plus downforce in Track Mode) once the car is fast.
-    const down = this.trackMode ? 1 : 0;
-    const aLat = 13 + down * (6 + 0.0016 * vF * vF) + (p.key === 'performance' ? 3 : 0);
-    const maxSteer = 0.55 / (1 + Math.pow(speed / 22, 1.6)) + 0.03;
-    const yawMax = Math.min(speed / 2.65 * Math.tan(maxSteer), aLat / Math.max(speed, 6));
-    const yawRate = -inp.steer * yawMax * (inp.handbrake ? 1.5 : 1) * Math.sign(vF || 1);
-    this.psi += yawRate * dt;
-    this.steerVis += (inp.steer * 0.45 / (1 + speed / 25) - this.steerVis) * Math.min(1, dt * 12);
-
-    const grip = inp.handbrake ? 1.2 : this.trackMode ? 10 : 6;
-    vL *= Math.exp(-grip * dt);
-    this.slip = vL;
-
-    const f2 = _a.set(Math.cos(this.psi), 0, -Math.sin(this.psi));
-    const r2 = _b.set(Math.sin(this.psi), 0, Math.cos(this.psi));
-    this.vel.set(0, 0, 0).addScaledVector(f2, vF).addScaledVector(r2, vL);
-    const px = gp.x, pz = gp.z;
-    gp.x += this.vel.x * dt;
-    gp.z += this.vel.z * dt;
-
-    // World bounds: soft wall.
-    if (gp.x < BOUNDS.x0 || gp.x > BOUNDS.x1) { gp.x = THREE.MathUtils.clamp(gp.x, BOUNDS.x0, BOUNDS.x1); this.vel.x *= -0.2; }
-    if (gp.z < BOUNDS.z0 || gp.z > BOUNDS.z1) { gp.z = THREE.MathUtils.clamp(gp.z, BOUNDS.z0, BOUNDS.z1); this.vel.z *= -0.2; }
-
-    // The wall ramp: drive into the mouth fast and straight to ride it, otherwise it is solid.
-    if (inWallFootprint(gp.x, gp.z)) {
-      const inMouth = Math.abs(gp.z - WALL.zc) < WALL.hw - 0.8 && px < WALL.x0 && gp.x >= WALL.x0;
-      if (inMouth && vF > 11 && f2.x > 0.74) {
-        this.enterWall(vF, gp.z - WALL.zc);
-        return;
+    if (p.fLift) {
+      // Body-frame quantities.
+      _qi.copy(this.q).invert();
+      const upW = _a.copy(WORLD_UP).applyQuaternion(_qi); // world up in body frame
+      const I = this.I, w = this.w;
+      const Lmax = 4 * p.fLift;
+      let L = 0;
+      if (this.hopT > 0) L = Lmax * 0.92;
+      else if (inp.lift && airborne && upW.y > 0.15) {
+        const vyT = 4 * (inp.throttle || 0) - 4 * (inp.brake || 0);
+        L = clamp(m * (G + 3 * (vyT - this.vel.y)) / Math.max(upW.y, 0.35), 0, Lmax);
+        this.hovering = true;
       }
-      // push back out the way we came
-      const dxl = gp.x - WALL.x0, dxr = WALL.x0 + WALL.R + WALL.thick - gp.x;
-      const dzl = gp.z - (WALL.zc - WALL.hw), dzr = WALL.zc + WALL.hw - gp.z;
-      const m = Math.min(dxl, dxr, dzl, dzr);
-      if (m === dxl) { gp.x = WALL.x0 - 0.01; this.vel.x = -Math.abs(this.vel.x) * 0.25; }
-      else if (m === dxr) { gp.x = WALL.x0 + WALL.R + WALL.thick + 0.01; this.vel.x = Math.abs(this.vel.x) * 0.25; }
-      else if (m === dzl) { gp.z = WALL.zc - WALL.hw - 0.01; this.vel.z = -Math.abs(this.vel.z) * 0.25; }
-      else { gp.z = WALL.zc + WALL.hw + 0.01; this.vel.z = Math.abs(this.vel.z) * 0.25; }
-      if (vF > 14) this.events.push({ type: 'bump' });
+      // Attitude: rate commands from the sticks, auto-level when they are released.
+      let cx = 0, cy = 0, cz = 0;
+      const active = airborne || this.hopT > 0;
+      if (active) {
+        const sticks = Math.abs(inp.roll) > 0.08 || Math.abs(inp.pitch) > 0.08 || Math.abs(inp.yaw) > 0.08;
+        if (sticks) {
+          cx = inp.roll * 5.5;
+          cz = -inp.pitch * 5;
+          cy = -inp.yaw * 2.4;
+        } else {
+          // tilt error between body up and world up
+          let ex = upW.z, ez = -upW.x; // (0,1,0) x upW = (upW.z, 0, -upW.x)
+          const s = Math.hypot(ex, ez);
+          const ang = Math.atan2(s, upW.y);
+          if (s < 1e-4 && upW.y < 0) { ex = 1; ez = 0; } else if (s > 1e-6) { ex /= s; ez /= s; }
+          const r = Math.min(ang * 3.2, 4.2);
+          cx = ex * r; cz = ez * r;
+          cy = 0;
+        }
+        const K = 9;
+        const tx = I.x * K * (cx - w.x), ty = I.y * K * (cy - w.y), tz = I.z * K * (cz - w.z);
+        // Allocate total lift L, pitch torque tz and roll torque tx across the four lift nozzles
+        // (FR, FL, RR, RL). Gas can only push, so any negative share is lifted by adding a
+        // torque-free mix (front xr : rear xf) until every nozzle is at or above zero.
+        const xf = 0.8, xr = 1.92, zz = 0.72, span = xf + xr;
+        const Ff = (xr * L + tz) / span, Fr = (xf * L - tz) / span;
+        const a = -tx / (4 * zz);
+        const F = [Ff / 2 + a, Ff / 2 - a, Fr / 2 + a, Fr / 2 - a];
+        const v0 = [xr, xr, xf, xf];
+        let lam = 0;
+        for (let i = 0; i < 4; i++) if (F[i] < 0) lam = Math.max(lam, -F[i] / v0[i]);
+        for (let i = 0; i < 4; i++) F[i] += lam * v0[i];
+        const lim = p.fLift;
+        let li = 0;
+        for (const n of p.nozzles) {
+          if (n.group !== 'lift') continue;
+          u[n.id] = clamp(F[li++] / lim, 0, 1);
+        }
+        // Yaw from the nose pair: right nozzle (exhaust +z) yaws the nose left (+y).
+        for (const n of p.nozzles) {
+          if (n.group !== 'nose') continue;
+          const want = ty / (1.92 * p.fNose);
+          u[n.id] = n.dir.z > 0 ? clamp(want, 0, 1) : clamp(-want, 0, 1);
+        }
+      }
     }
-
-    // Parked vehicles.
-    const hitO = this.hitObstacle(gp.x, gp.z, gp.y + 0.3);
-    if (hitO) { this.pos.copy(gp); this.pos.y += COM_H; this.crash('Smashed into a parked car'); return; }
-
-    // Ground following, with take-off at ramp lips.
-    const ny = groundH(gp.x, gp.z);
-    if (ny - gp.y > 0.9) { this.pos.copy(gp); this.pos.y += COM_H; this.crash('Hit the ramp face'); return; }
-    const ballistic = gp.y + this.vyG * dt - 0.5 * G * dt * dt;
-    if (this.vyG > 1.0 && ny < ballistic - 0.04) {
-      this.takeOff(this.vyG);
-      return;
+    // Apply nozzle forces and burn gas.
+    let flow = 0;
+    for (const n of p.nozzles) {
+      const uu = u[n.id];
+      if (uu <= 0.001) continue;
+      const Fmag = uu * (n.group === 'rear' ? p.fRear : n.group === 'lift' ? p.fLift : p.fNose);
+      this.toWorld(n.pos, _c);
+      _d.copy(n.dir).applyQuaternion(this.q).multiplyScalar(-Fmag);
+      this.addForceAt(_d, _c);
+      flow += Fmag / (p.isp * G0);
     }
-    this.vyG = (ny - gp.y) / dt;
-    gp.y = ny;
+    this.gas = Math.max(0, this.gas - flow * h);
+  }
 
-    groundN(gp.x, gp.z, _n);
-    this.upSm.lerp(_n, Math.min(1, dt * 14)).normalize();
-    this.syncFromGround(0);
+  // Per-frame bookkeeping: air time, wall riding, timers, events.
+  track(dt, inp) {
+    this.basis();
+    const p = this.p;
+    // smoothed acceleration in the body frame (for the G meter)
+    _a.subVectors(this.vel, this.lastVel).divideScalar(dt);
+    this.lastVel.copy(this.vel);
+    _a.applyQuaternion(_qi.copy(this.q).invert());
+    this.acc.lerp(_a, Math.min(1, dt * 10));
+
+    // gas: slow top-up from the compressor while on the ground and not firing
+    let firing = false;
+    for (let i = 0; i < this.nozzleU.length; i++) if (this.nozzleU[i] > 0.01) firing = true;
+    if (p.gas && !firing && this.contacts >= 3) this.gas = Math.min(p.gas, this.gas + p.gas * 0.04 * dt);
+
+    // wall
+    let onWall = 0;
+    for (const w of this.wheels) if (w.contact && w.tag === 'wall') onWall++;
+    const wasWall = this.onWall;
+    this.onWall = onWall >= 2;
+    if (this.onWall) {
+      this.wallTh = wallTheta(this.pos);
+      if (!wasWall && this.wallTh > 0.3) this.events.push({ type: 'wall' });
+      this.wallMax = Math.max(this.wallMax, this.wallTh);
+      if (this.wallTh > 2.7 && this.vel.length() < 2.5) this.hangT += dt; else this.hangT = 0;
+      if (this.hangT > 0.6 && !this.hung) { this.hung = true; this.events.push({ type: 'hang' }); }
+    } else if (this.contacts >= 3) { this.wallMax = 0; this.hung = false; }
+
+    // air time
+    const air = this.contacts === 0;
+    if (air) {
+      this.airT += dt;
+      this.groundT = 0;
+      if (!this.air && this.airT > 0.12) {
+        this.air = { t: 0, pitch: 0, roll: 0, yaw: 0, maxH: this.pos.y, fromWall: wasWall || this.wallMax > 1.2, hop: this.hopT > 0, startY: this.pos.y, startSpeed: Math.hypot(this.vel.x, this.vel.z), over: new Set() };
+        if (this.air.fromWall) this.events.push({ type: 'release', th: this.wallMax });
+      }
+      if (this.air) {
+        const a = this.air;
+        a.t += dt;
+        a.pitch += this.w.z * dt;
+        a.roll += this.w.x * dt;
+        a.yaw += this.w.y * dt;
+        a.maxH = Math.max(a.maxH, this.pos.y);
+        for (const bx of BOXES) {
+          if (this.pos.x > bx.x0 && this.pos.x < bx.x1 && this.pos.z > bx.z0 - 0.5 && this.pos.z < bx.z1 + 0.5 && this.pos.y > bx.y1) a.over.add(bx.car.name);
+        }
+      }
+    } else {
+      this.groundT += dt;
+      if (this.air && this.contacts >= 2 && this.mode === 'drive') {
+        const a = this.air;
+        _a.set(0, 0, 0);
+        for (const w of this.wheels) if (w.contact) _a.add(w.n);
+        _a.normalize();
+        this.events.push({ type: 'land', air: { ...a, over: [...a.over] }, quality: this.up.dot(_a), impact: Math.max(0, -this.vel.dot(_a)) });
+        this.air = null;
+      }
+      if (this.groundT > 0.1) { this.airT = 0; if (this.air && this.mode !== 'drive') this.air = null; }
+    }
+    this.airborne = air && this.airT > 0.12;
+    if (this.mode === 'crashed') { this.air = null; return; }
 
     // 0-60 timer
+    const vF = this.vFwd;
     const t = this.t60;
-    if (t.state === 'idle' && Math.abs(vF) < 0.5 && inp.throttle > 0.05) { t.state = 'run'; t.t = 0; }
+    if (t.state === 'idle' && Math.abs(vF) < 0.5 && inp.throttle > 0.05 && this.contacts >= 3) { t.state = 'run'; t.t = 0; }
     else if (t.state === 'run') {
       t.t += dt;
       if (vF * MPH >= 60) {
         t.state = 'done'; t.result = Math.round(t.t * 100) / 100;
         this.events.push({ type: 't60', time: t.result, variant: p.key });
-      } else if (t.t > 8 || vF < 0) t.state = 'idle';
-    } else if (t.state === 'done' && vF < 1) t.state = 'idle';
-    else if (t.state === 'idle' && t.t !== 0) t.t = 0;
-  }
-
-  hitObstacle(x, z, y) {
-    for (const o of OBSTACLES) {
-      if (x > o.x0 - 1.0 && x < o.x1 + 1.0 && z > o.z0 - 0.9 && z < o.z1 + 0.9 && y < o.top) return o;
-    }
-    return null;
-  }
-
-  takeOff(vy) {
-    this.pos.copy(this.gp).addScaledVector(this.up, COM_H);
-    this.vel.y = vy;
-    this.w.set(0, 0, 0);
-    this.beginAir(false, 0);
-    this.mode = 'air';
-  }
-
-  beginAir(fromWall, pitch0) {
-    this.air = { t: 0, pitch: pitch0, roll: 0, yaw: 0, fromWall, wallTime: this.wallRide, maxH: 0, startY: this.pos.y };
-    this.wallRide = 0;
-  }
-
-  stepAir(dt, inp) {
-    const p = this.p;
-    const air = this.air;
-    this.vel.y -= G * dt;
-    const sp = this.vel.length();
-    this.vel.multiplyScalar(1 - 0.00012 * sp * dt);
-
-    const c = p.airControl;
-    const acc = 7.5 * c;
-    const wMax = 1.8 + 4.5 * c;
-    const w = this.w;
-    const usesGas = p.tank > 0;
-    let gasUse = 0;
-    const axes = [['z', -inp.pitch], ['x', inp.roll], ['y', -inp.yaw]];
-    for (const [ax, input] of axes) {
-      if (Math.abs(input) > 0.05) {
-        if (!usesGas || this.tank > 0) {
-          w[ax] += input * acc * dt;
-          if (usesGas) gasUse += Math.abs(input) * 6;
-        }
-        w[ax] = THREE.MathUtils.clamp(w[ax], -wMax, wMax);
-      } else {
-        w[ax] *= Math.exp(-0.7 * c * dt);
-      }
-    }
-    // Thrusters as translation.
-    this.basis();
-    if (p.key === 'thrust' && inp.thrust && this.tank > 0) {
-      this.vel.addScaledVector(this.fwd, 15 * dt);
-      gasUse += p.drain;
-      this.boosting = true;
-    } else if (p.key === 'rocket') {
-      if (inp.thrust && this.tank > 0) {
-        this.vel.addScaledVector(this.up, 17 * dt);
-        gasUse += p.drain;
-        this.boosting = true;
-        this.hovering = true;
-      }
-      if (inp.handbrake && this.tank > 0) {
-        this.vel.addScaledVector(this.fwd, 15 * dt);
-        gasUse += p.drain * 0.8;
-        this.boosting = true;
-      }
-    }
-    this.tank = Math.max(0, this.tank - gasUse * dt);
-
-    this.pos.addScaledVector(this.vel, dt);
-    const rate = w.length();
-    if (rate > 1e-5) this.q.multiply(_q.setFromAxisAngle(_a.copy(w).divideScalar(rate), rate * dt)).normalize();
-    air.pitch += w.z * dt;
-    air.roll += w.x * dt;
-    air.yaw += w.y * dt;
-    air.t += dt;
-    air.maxH = Math.max(air.maxH, this.pos.y - air.startY);
-
-    this.basis();
-    if (this.pos.x < BOUNDS.x0 || this.pos.x > BOUNDS.x1) { this.pos.x = THREE.MathUtils.clamp(this.pos.x, BOUNDS.x0, BOUNDS.x1); this.vel.x *= -0.2; }
-    if (this.pos.z < BOUNDS.z0 || this.pos.z > BOUNDS.z1) { this.pos.z = THREE.MathUtils.clamp(this.pos.z, BOUNDS.z0, BOUNDS.z1); this.vel.z *= -0.2; }
-
-    // Wall ramp body.
-    if (inWallFootprint(this.pos.x, this.pos.z) && this.pos.y - COM_H < wallSurfaceY(this.pos.x) + 0.2) {
-      this.crash('Hit the wall ramp');
-      return;
-    }
-    if (air.t > 0.12 && this.hitObstacle(this.pos.x, this.pos.z, this.pos.y - 0.4)) {
-      this.crash('Landed on the traffic');
-      return;
-    }
-
-    // Ground contact.
-    let contact = false;
-    for (const lp of WHEEL_PTS) {
-      _c.copy(lp).applyQuaternion(this.q).add(this.pos);
-      if (_c.y < groundH(_c.x, _c.z)) { contact = true; break; }
-    }
-    let roofHit = false;
-    for (const lp of ROOF_PTS) {
-      _c.copy(lp).applyQuaternion(this.q).add(this.pos);
-      if (_c.y < groundH(_c.x, _c.z)) { roofHit = true; break; }
-    }
-    if (air.t < 0.2 || (!contact && !roofHit)) return;
-    groundN(this.pos.x, this.pos.z, _n, 1.6);
-    const upDot = this.up.dot(_n);
-    const impact = -this.vel.y;
-    if (roofHit || upDot < 0.55) { this.crash('Landed upside down'); return; }
-    if (impact > 42) { this.crash('Landing too hard'); return; }
-
-    // Clean enough: hand over to ground driving.
-    const f = _a.copy(this.fwd);
-    f.y = 0;
-    if (f.lengthSq() < 1e-4) f.set(this.vel.x, 0, this.vel.z);
-    f.normalize();
-    this.psi = Math.atan2(-f.z, f.x);
-    const keep = 0.62 + 0.38 * Math.pow((upDot - 0.55) / 0.45, 1.5);
-    this.vel.y = 0;
-    this.vel.x *= keep; this.vel.z *= keep;
-    this.gp.set(this.pos.x, groundH(this.pos.x, this.pos.z), this.pos.z);
-    this.vyG = 0;
-    this.upSm.copy(this.up);
-    this.mode = 'ground';
-    this.events.push({ type: 'land', air: { ...air }, quality: upDot, impact });
-    this.air = null;
-    this.w.set(0, 0, 0);
-  }
-
-  enterWall(v, zOff) {
-    this.mode = 'wall';
-    this.wall = { th: 0, v, z: zOff };
-    this.wallRide = 0;
-    this.events.push({ type: 'wall' });
-  }
-
-  stepWall(dt, inp, pressed) {
-    const p = this.p;
-    const W = this.wall;
-    const R = WALL.R;
-    let a = 0;
-    const sp = Math.min(Math.max(W.v, 0) / p.vmax, 1);
-    a += 0.85 * p.a0 * (1 - sp * sp) * inp.throttle;
-    if (inp.thrust && p.boost > 0 && this.tank > 1) {
-      a += p.boost * 0.7;
-      this.tank = Math.max(0, this.tank - p.drain * dt);
-      this.boosting = true;
-    }
-    if (inp.brake > 0.02) a -= 18 * inp.brake;
-    a -= G * Math.sin(W.th);
-    a -= 0.0032 * W.v * Math.abs(W.v) + 0.3 * Math.sign(W.v);
-    W.v += a * dt;
-    W.th += (W.v / R) * dt;
-    W.z = THREE.MathUtils.clamp(W.z + inp.steer * 4.5 * dt, -(WALL.hw - 1.4), WALL.hw - 1.4);
-    this.wallRide += dt;
-
-    const th = W.th;
-    const s = Math.sin(th), co = Math.cos(th);
-    this.upSm.set(-s, co, 0);
-    this.q.setFromAxisAngle(_a.set(0, 0, 1), th);
-    this.basis();
-    _b.set(WALL.x0 + R * s, R * (1 - co), WALL.zc + W.z);
-    this.pos.copy(_b).addScaledVector(this.up, COM_H);
-    this.vel.set(W.v * co, W.v * s, 0);
-    this.gp.copy(_b);
-
-    if (th <= 0) {
-      this.mode = 'ground';
-      this.gp.set(WALL.x0 - 0.2, 0, WALL.zc + W.z);
-      this.psi = 0;
-      this.vel.set(W.v, 0, 0);
-      this.vyG = 0;
-      this.upSm.set(0, 1, 0);
-      this.wall = null;
-      return;
-    }
-    const release = pressed.handbrake && th > 0.4;
-    if (th >= WALL.thetaMax || release) {
-      this.mode = 'air';
-      this.w.set(0, 0, W.v / R);
-      this.beginAir(true, th);
-      this.wall = null;
-      this.events.push({ type: 'release', th });
-    }
+      } else if (t.t > 8 || vF < -0.5 || (inp.throttle < 0.05 && !inp.boost)) t.state = 'idle';
+    } else if (t.state === 'done' && Math.abs(vF) < 0.5) t.state = 'idle';
   }
 }
+
+const NOINPUT = { throttle: 0, brake: 0, steer: 0, pitch: 0, roll: 0, yaw: 0, boost: false, lift: false, handbrake: false };
