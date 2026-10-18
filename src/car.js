@@ -943,10 +943,11 @@ export class RoadsterModel {
     }
     b.build(m, this.mat);
 
-    // yoke: a squared sideways figure 8 (a boxy infinity sign), as in the closer-look video. Two tall
-    // white grip loops joined through the middle by a shallower bridge, so the top and bottom edges dip
-    // between the grips; each loop has its own opening with a dark grey inner lining. A large grey
-    // pillowed pad sits on the bridge, with black button clusters on spokes across each opening.
+    // yoke, after the closer-look video: a dark grey body shaped like a sideways figure 8 (two loops
+    // joined through the middle), whose grips flare outward at the top and bottom corners. Only the
+    // outer grips are wrapped in white; the bars through the middle stay grey. A horizontal grey
+    // crossbar carrying the button clusters joins the two grips straight through the centre, and the
+    // large pillowed pad sits on it.
     const yokeMount = new THREE.Group();
     yokeMount.position.set(0.32, 0.125, z0);
     yokeMount.rotation.z = -0.2; // top leans forward, column runs forward and down
@@ -954,71 +955,54 @@ export class RoadsterModel {
     yokeMount.add(yoke);
     {
       const yb = new Batch();
-      const H = 0.23, Hw = 0.196, x1 = 0.05, x2 = 0.172, rO = 0.03, f = 0.01, depth = 0.07;
+      const depth = 0.066;
       const ext = (shape, d, bevel) => {
-        const g = new THREE.ExtrudeGeometry(shape, { depth: d, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 10 });
+        const g = new THREE.ExtrudeGeometry(shape, { depth: d, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 12 });
         g.translate(0, 0, -d / 2);
         g.rotateY(PI / 2);
         return g;
       };
-      // outer outline: right lobe, then the mirrored left lobe, joined by the bridge (|y| <= Hw/2)
-      const half = (sh, sx) => {
+      // one lobe's outline: from the middle bar's top, up into the flared ear, down the inward-curving
+      // outer grip, round the bottom ear and back to the bar's bottom (sx = side). Inset by t for the
+      // opening, which then closes along x0 at the pad.
+      const OUT = { H: 0.25, Hw: 0.172, x1: 0.06, x2: 0.166, rO: 0.042, fl: 0.014 };
+      const lobe = (sx, t, x0) => {
         const X = (x) => x * sx;
-        sh.lineTo(X(x1 - f), Hw / 2);
-        sh.quadraticCurveTo(X(x1), Hw / 2, X(x1), Hw / 2 + f * 0.6);
-        sh.quadraticCurveTo(X(x1), H / 2, X(x1 + rO), H / 2);
-        sh.lineTo(X(x2 - rO), H / 2);
-        sh.quadraticCurveTo(X(x2), H / 2, X(x2), H / 2 - rO);
-        sh.lineTo(X(x2), -H / 2 + rO);
-        sh.quadraticCurveTo(X(x2), -H / 2, X(x2 - rO), -H / 2);
-        sh.lineTo(X(x1 + rO), -H / 2);
-        sh.quadraticCurveTo(X(x1), -H / 2, X(x1), -Hw / 2 - f * 0.6);
-        sh.quadraticCurveTo(X(x1), -Hw / 2, X(x1 - f), -Hw / 2);
+        const H = OUT.H - 2 * t, Hw = OUT.Hw - 2 * t, x2 = OUT.x2 - t * 1.6, rO = Math.max(0.012, OUT.rO - t), fl = OUT.fl;
+        const P = new THREE.Path();
+        P.moveTo(X(x0), Hw / 2);
+        P.quadraticCurveTo(X(OUT.x1 + 0.03), Hw / 2, X(x2 - rO), H / 2);       // bar rises into the ear
+        P.quadraticCurveTo(X(x2 + fl), H / 2, X(x2 + fl * 0.6), H / 2 - rO);   // flared top corner
+        P.quadraticCurveTo(X(x2 - 0.016), 0, X(x2 + fl * 0.6), -H / 2 + rO);   // outer edge curves in
+        P.quadraticCurveTo(X(x2 + fl), -H / 2, X(x2 - rO), -H / 2);            // flared bottom corner
+        P.quadraticCurveTo(X(OUT.x1 + 0.03), -Hw / 2, X(x0), -Hw / 2);
+        return P.getPoints(14);
       };
-      const outline = new THREE.Shape();
-      outline.moveTo(0, Hw / 2);
-      half(outline, 1);
-      outline.lineTo(0, -Hw / 2);
-      // left lobe, walked bottom to top so the outline stays one loop
-      const X = (x) => -x;
-      outline.lineTo(X(x1 - f), -Hw / 2);
-      outline.quadraticCurveTo(X(x1), -Hw / 2, X(x1), -Hw / 2 - f * 0.6);
-      outline.quadraticCurveTo(X(x1), -H / 2, X(x1 + rO), -H / 2);
-      outline.lineTo(X(x2 - rO), -H / 2);
-      outline.quadraticCurveTo(X(x2), -H / 2, X(x2), -H / 2 + rO);
-      outline.lineTo(X(x2), H / 2 - rO);
-      outline.quadraticCurveTo(X(x2), H / 2, X(x2 - rO), H / 2);
-      outline.lineTo(X(x1 + rO), H / 2);
-      outline.quadraticCurveTo(X(x1), H / 2, X(x1), Hw / 2 + f * 0.6);
-      outline.quadraticCurveTo(X(x1), Hw / 2, X(x1 - f), Hw / 2);
-      outline.lineTo(0, Hw / 2);
-      // one opening per lobe: between the pad and the grip, under the slim top and bottom bars
-      const hx0 = 0.05, hx1 = x2 - 0.026, hh = Hw - 0.03, hc = (hx0 + hx1) / 2, hw = hx1 - hx0;
-      const hole = (sx, grow, P) => {
-        const sh = roundRect(P, hw + grow, hh + grow, 0.026 + grow / 2);
-        const pts = sh.getPoints(10).map((v) => new THREE.Vector2(v.x + sx * hc, v.y));
-        return pts;
-      };
-      for (const sx of [1, -1]) outline.holes.push(new THREE.Path(hole(sx, 0.004, new THREE.Path())));
-      yb.add('white', ext(outline, depth - 0.008, 0.004));
-      // dark grey inner lining of each opening, a wide band when seen at an angle
+      const T = 0.017, HX0 = 0.062; // rim thickness, inner edge of each opening (beside the pad)
+      // dark grey body: right lobe top to bottom, then the left lobe bottom to top
+      const body = new THREE.Shape([...lobe(1, 0, 0), ...lobe(-1, 0, 0).reverse()]);
+      for (const sx of [1, -1]) body.holes.push(new THREE.Path(lobe(sx, T, sx * 0 + HX0)));
+      yb.add('trim', ext(body, depth - 0.006, 0.003));
+      // white wrap on the outer grips only, from ear to ear, stopping just short of each opening
+      const hx1 = OUT.x2 - 0.038;
       for (const sx of [1, -1]) {
-        const ring = new THREE.Shape(hole(sx, 0.006, new THREE.Shape()));
-        ring.holes.push(new THREE.Path(hole(sx, -0.006, new THREE.Path())));
-        yb.add('trim', ext(ring, depth - 0.012, 0));
+        const xcut = 0.112;
+        const outer = lobe(sx, -0.0015, 0).filter((v) => Math.abs(v.x) >= xcut);
+        const inner = lobe(sx, T - 0.003, HX0).filter((v) => Math.abs(v.x) >= xcut).reverse();
+        yb.add('white', ext(new THREE.Shape([...outer, ...inner]), depth + 0.002, 0.003));
       }
-      // large pillowed centre pad on the bridge, slightly proud of the rim toward the driver
-      const pw = 0.12, ph = 0.165;
-      yb.rbox('padGray', 0.045, ph, pw, 0.026, -0.03, 0, 0);
-      yb.rbox('padGray', 0.02, ph - 0.026, pw - 0.026, 0.012, -0.05, 0, 0);
+      // horizontal crossbar through the middle, grip to grip, carrying the button clusters
+      yb.rbox('alcantara', 0.03, 0.046, 2 * hx1 + 0.01, 0.012, -0.008, -0.006, 0);
+      // large pillowed centre pad on the crossbar, slightly proud toward the driver
+      const pw = 0.12, ph = 0.16;
+      yb.rbox('padGray', 0.045, ph, pw, 0.03, -0.03, 0, 0);
+      yb.rbox('padGray', 0.02, ph - 0.03, pw - 0.03, 0.014, -0.05, 0, 0);
       for (const s of [1, -1]) {
-        // horizontal spoke across the opening to the grip, carrying a black button cluster
-        const z0s = pw / 2 - 0.004, z1s = hx1 + 0.004, zc = (z0s + z1s) / 2;
-        yb.rbox('alcantara', 0.026, 0.032, z1s - z0s, 0.008, -0.012, -0.004, s * zc);
-        yb.rbox('gloss', 0.008, 0.03, 0.038, 0.005, -0.028, -0.002, s * (zc - 0.004));
-        for (const dz of [-0.01, 0.01]) yb.box('black', 0.006, 0.008, 0.008, -0.033, 0.006, s * (zc - 0.004 + dz));
-        yb.box('black', 0.006, 0.008, 0.018, -0.033, -0.01, s * (zc - 0.004));
-        yb.add('silver', new THREE.CylinderGeometry(0.007, 0.007, 0.005, 10), -0.034, 0.003, s * (zc + 0.016), 0, 0, PI / 2);
+        const zc = (pw / 2 + hx1) / 2;
+        yb.rbox('gloss', 0.008, 0.034, 0.05, 0.006, -0.026, -0.004, s * zc);
+        for (const dz of [-0.013, 0, 0.013]) yb.box('black', 0.006, 0.009, 0.009, -0.031, 0.005, s * (zc + dz));
+        yb.box('black', 0.006, 0.008, 0.026, -0.031, -0.012, s * zc);
+        yb.add('silver', new THREE.CylinderGeometry(0.007, 0.007, 0.005, 10), -0.032, 0.0, s * (zc + 0.03), 0, 0, PI / 2);
       }
       yb.build(yoke, this.mat);
     }
