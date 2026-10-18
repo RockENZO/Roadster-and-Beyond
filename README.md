@@ -50,18 +50,18 @@ Pushing to `main` deploys to GitHub Pages through `.github/workflows/deploy.yml`
 | | Performance | Thrust | Rocket |
 | --- | --- | --- | --- |
 | Suction fans | yes | yes | yes |
-| Cold-gas nozzles | none | 4 rear | 10: 4 rear, 4 lift (one behind each wheel), 2 nose |
+| Cold-gas nozzles | none | 4 rear | 10: 4 rear, 4 lift (one behind each wheel), 2 nose (angled forward and out from the front corners) |
 | Seats | 2 | 2 | 1 |
 | 0-60 mph in the game | 1.52 s | 0.84 s | 0.58 s |
 | Tesla's claim | under 1.6 s | under 0.9 s | under 0.6 s |
 
-**The physics** is a real rigid body, not an arcade model. The car has mass and inertia; four raycast wheels with springs, dampers and a slip-angle tyre model (about 1.26 g of grip on their own); fans that pull the car onto whatever surface it is on, up to 4,700 kg (the figure the broadcast's downforce gauge peaked at); aero drag and wing downforce; and every cold-gas nozzle as a separate force at its real position. The Rocket has a flight computer: stick input commands roll, pitch and yaw rates and, while hovering, holds the attitude you left it at. Turn on flight assist and it also levels itself when you let go and leans against drift like a drone (Event mode always flies with assist). It ignores a wheel briefly leaving the road over a bump, so it never fights your steering on the ground. This is what lets the car climb past vertical and hang upside down, and why a flip only works if you have the thrust and the height for it.
+**The physics** is a real rigid body, not an arcade model. The car has mass and inertia; four raycast wheels with springs, dampers and a slip-angle tyre model (about 1.26 g of grip on their own); fans that pull the car onto whatever surface it is on, up to 4,700 kg (the figure the broadcast's downforce gauge peaked at); aero drag and wing downforce; and every cold-gas nozzle as a separate force at its real position. The Rocket has a flight computer: stick input commands roll, pitch and yaw rates and, while hovering, holds the attitude you left it at. It splits the lift between the four lift jets with the least total thrust that still gives the roll and pitch it wants (push-only jets cannot pull, so it adds just enough lift to the opposite side), and fires the angled nose jets for yaw. Turn on flight assist and it also levels itself, holds its heading, when you let go and leans against drift like a drone (Event mode always flies with assist). It ignores a wheel briefly leaving the road over a bump, so it never fights your steering on the ground. This is what lets the car climb past vertical and hang upside down, and why a flip only works if you have the thrust and the height for it.
 
 **The four stunts**, in the order and with the captions of the broadcast highlights:
 
 1. **Vertical wall climb / holding upside down.** A tall, narrow ramp that curls over to 170°, about 68 ft up. Suction holds the car on the ceiling; it then reverses back down.
 2. **Flight off the ramp.** Up the same ramp and off the lip. The flight computer rolls it upright and the four lift jets hover it down into a cloud of smoke.
-3. **Kickflip over the lineup.** A thruster hop and a full roll over a Model 3, Model Y, Cybertruck, Cybercab and Semi parked side by side. Replayed in slow motion.
+3. **Kickflip over the lineup.** A thruster hop and a full 360° roll over a Model 3, Model Y, Cybertruck, Cybercab and Semi parked side by side. As in the event, take-off, roll, recovery and landing stay on one straight line: the hop pushes along the car's own up axis only while it is upright, and heading hold keeps the nose pointed down the track (about 1 m of sideways drift and under 1° of heading change over the whole jump). Replayed in slow motion.
 4. **Vertical jump & flip.** From a standstill: lift, backflip, hover down, in front of the red pillar and the light fans. Replayed in slow motion.
 
 Event mode closes with a 0-60 run on the drag strip (the event's timed run was 0.81 s).
