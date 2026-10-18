@@ -9,6 +9,7 @@ import { Sound } from './audio.js';
 import { WALL, SPAWNS, LINEUP, STRIP, PAD } from './track.js';
 import { EventShow, stuntFor } from './event.js';
 import { BroadcastHud } from './hud.js';
+import { Telemetry } from './screen.js';
 
 const $ = (id) => document.getElementById(id);
 const TAU = Math.PI * 2;
@@ -50,7 +51,10 @@ const keys = Object.keys(VARIANTS);
 const mst = {
   wheels: [0, 1, 2, 3].map(() => ({ steer: 0, spin: 0, y: 0 })),
   doors: 0, doorsT: 0, wing: 0, airbrake: 0, lights: 0, brake: 0, fans: 0, nozzles: null, speed: 0,
+  frunk: 0, frunkT: 0, steer: 0, cockpit: false, telemetry: null,
 };
+const telemetry = new Telemetry();
+let lastCtrl = input.s;
 
 function loadModel() {
   if (model) scene.remove(model.group);
@@ -161,7 +165,7 @@ function renderHints() {
     : `<div>${k('W')} ${k('S')} <b>Throttle / brake</b> (hold ${k('S')} at a stop to reverse) &nbsp; ${k('A')} ${k('D')} <b>Steer</b></div>
        ${gas}
        <div>${k('T')} <b>Track Mode</b> &nbsp; ${k('F')} <b>Fans off</b> (drop from the wall) &nbsp; ${k('B')} <b>Handbrake</b></div>
-       <div>${k('C')} Camera &nbsp; ${k('L')} Lights &nbsp; ${k('O')} Doors &nbsp; ${k('1')}-${k('5')} Stunts &nbsp; ${k('R')} Respawn &nbsp; ${k('H')} Hide help &nbsp; ${k('M')} Mute &nbsp; ${k('Esc')} Menu</div>`;
+       <div>${k('C')} Camera &nbsp; ${k('L')} Lights &nbsp; ${k('O')} Doors &nbsp; ${k('K')} Front lid &nbsp; ${k('1')}-${k('5')} Stunts &nbsp; ${k('R')} Respawn &nbsp; ${k('H')} Hide help &nbsp; ${k('M')} Mute &nbsp; ${k('Esc')} Menu</div>`;
 }
 input.onDevice = (d) => { renderHints(); menuHint(); toast(d === 'pad' ? `Controller active${input.padName ? ': ' + input.padName.replace(/\(.*\)/, '').trim() : ''}` : 'Keyboard active'); };
 
@@ -466,9 +470,9 @@ function updateCamera(dt, t) {
     _p.copy(model.cockpit || new THREE.Vector3(0.0, 0.32, -0.33));
     desired = _p.applyQuaternion(v.q).add(v.pos);
     camPos.copy(desired);
-    look = new THREE.Vector3(12, -0.4, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), -orbit * 1.2).applyQuaternion(v.q).add(v.pos);
+    look = new THREE.Vector3(12, -1.0, model.cockpit ? model.cockpit.z : 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), -orbit * 1.2).applyQuaternion(v.q).add(v.pos);
     camera.up.copy(v.up);
-    fov = 68;
+    fov = 64;
   } else {
     const dist = camMode === 1 ? 11 : v.airborne ? 7.4 : 6.4;
     const height = (camMode === 1 ? 3.6 : 1.9) + orbitP * 3;
@@ -500,8 +504,13 @@ function syncModel(dt) {
     const w = v.wheels[i], m = mst.wheels[i];
     m.steer = w.steer; m.spin = w.spin; m.y = w.y;
   }
-  if (Math.abs(v.vFwd) > 3) mst.doorsT = 0;
+  if (Math.abs(v.vFwd) > 3) { mst.doorsT = 0; mst.frunkT = 0; }
   mst.doors += (mst.doorsT - mst.doors) * kk(2.2);
+  mst.frunk += (mst.frunkT - mst.frunk) * kk(2.2);
+  mst.steer = v.steer || 0;
+  // first-person: clear glass and a live touchscreen only while the cockpit camera is in use
+  mst.cockpit = camMode === 2 && !menuOpen && !(show.active && camOverride);
+  mst.telemetry = telemetry.update(dt, v, lastCtrl);
   mst.wing += ((v.wingUp ? 1 : 0) - mst.wing) * kk(4);
   mst.airbrake = v.airbrake;
   mst.lights += ((lights ? 1 : 0) - mst.lights) * kk(5);
@@ -596,6 +605,7 @@ function update(dt) {
     if (P.camera) { camMode = (camMode + 1) % CAMS.length; toast(CAMS[camMode]); }
     if (P.lights) { lights = !lights; toast(lights ? 'Headlights up' : 'Headlights hidden'); }
     if (P.doors) { mst.doorsT = mst.doorsT ? 0 : 1; if (Math.abs(vehicle.vFwd) > 3) toast('Stop to open the doors'); }
+    if (P.frunk) { mst.frunkT = mst.frunkT ? 0 : 1; if (Math.abs(vehicle.vFwd) > 3) toast('Stop to open the front lid'); }
     if (P.hints) $('hints').classList.toggle('off');
     if (P.reset) { vehicle.respawn(stuntFor(vehicle.pos)); centerMsg(vehicle.spawn.label, '', 1); }
     let jump = null;
@@ -621,6 +631,7 @@ function update(dt) {
     if (n === 10) acc = 0;
   }
   vehicle.handbrake = ctrl.handbrake;
+  lastCtrl = ctrl;
   syncModel(dt);
   if (!menuOpen || show.active) emitFx(dt);
   fx.update(dt);

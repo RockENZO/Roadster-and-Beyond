@@ -20,7 +20,7 @@ Pushing to `main` deploys to GitHub Pages through `.github/workflows/deploy.yml`
 
 ## What is in it
 
-**The car**, modelled from Tesla's official photos (side profile, front and rear three-quarter, head-on, interior, doors open): a low faceted fastback in satin silver with a black lower body, a bronze glass canopy that runs from the windshield to the tail, a folded nose with a full-width light line and pop-up lamps, butterfly doors, a deck wing that rises on tall struts and tilts into an airbrake, a full-width red tail bar over an RDSTR plate, four suction fans behind the diffuser, six-spoke wheels and a white two-seat (or one-seat) cabin with a squared yoke.
+**The car**, modelled from Tesla's official photos and the close-look video: a low faceted wedge in satin white with a black lower body and silver sill blades, a bronze glass canopy from the windshield to the tail, a raked black nose under a full-width light line, pop-up lamps that lift out of the hood seams, a hood vent, a front lid that opens on the carbon-wrapped gas sphere, amber markers over the outlets behind the front wheels, butterfly doors, a deck wing that rises up and back on swan-neck struts and tilts into an airbrake, a full-width red tail bar with lit lettering over a lit RDSTR plate, four gold-lined cold-gas nozzles over four suction-fan bays in a carbon diffuser, and six-spoke wheels on aero discs. Inside: white buckets with lit badges, belts, a dark alcantara dash with carbon trim and a red ambient strip, the squared yoke (it turns with the steering), a console tray, the roll hoop, and the floating touchscreen, which in the cockpit camera shows live telemetry in the car's Track Mode layout (speed, gear, battery, brake/accel/regen, temperatures, g-meter, lap trace, tyres, 0-60 session and thruster gas).
 
 **Three versions**, as announced:
 
@@ -62,6 +62,7 @@ Event mode closes with a 0-60 run on the drag strip (the event's timed run was 0
 | Camera (chase, far, cockpit, broadcast) | `C` | `Y` |
 | Look around | | Right stick |
 | Headlights / doors | `L` / `O` | D-pad up / down |
+| Front lid (gas sphere) | `K` | |
 | Jump to a stunt | `1`-`5` | D-pad left / right |
 | Respawn | `R` | View |
 | Menu / pause / leave Event mode | `Esc` | Menu |

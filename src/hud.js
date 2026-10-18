@@ -70,7 +70,7 @@ export class BroadcastHud {
     if (this.key === p.key) return;
     this.key = p.key;
     if (this.model) this.holder.remove(this.model.group);
-    this.model = new RoadsterModel(p);
+    this.model = new RoadsterModel(p, { interior: false });
     this.model.group.scale.setScalar(0.92);
     this.model.group.traverse((o) => { if (o.isLight) o.visible = false; });
     this.holder.add(this.model.group);

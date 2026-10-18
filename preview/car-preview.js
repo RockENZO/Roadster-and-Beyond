@@ -3,9 +3,10 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoadsterModel } from '../src/car.js';
 import { VARIANTS, WHEELS, COM_H, SUSP } from '../src/spec.js';
+import { DEMO_TEL } from '../src/screen.js';
 
-// Preview: ?view=side|front|rear|top|threeq|rear3q|interior|frontlow&variant=rocket&doors=1&wing=1&airbrake=1
-//          &lights=1&brake=1&fans=1&noz=1&steer=0.4&bg=light
+// Preview: ?view=side|front|rear|top|threeq|rear3q|interior|frontlow|cockpit|frunk|dash&variant=rocket&doors=1&wing=1
+//          &airbrake=1&lights=1&brake=1&fans=1&noz=1&steer=0.4&frunk=1&mph=54&bg=light
 const q = new URLSearchParams(location.search);
 const num = (k, d = 0) => (q.has(k) ? parseFloat(q.get(k)) : d);
 
@@ -42,6 +43,7 @@ scene.add(fill);
 const variant = VARIANTS[q.get('variant') || 'thrust'];
 const car = new RoadsterModel(variant);
 car.group.position.set(0, COM_H, 0);
+window.__car = car;
 scene.add(car.group);
 
 const cam = new THREE.PerspectiveCamera(num('fov', 30), innerWidth / innerHeight, 0.05, 200);
@@ -56,6 +58,8 @@ const views = {
   rear3q: [[-6.2, 1.3, 5.2], [-0.1, 0.5, 0]],
   frontlow: [[7.5, 0.9, 3.3], [0, 0.45, 0]],
   interior: [[-0.35, 0.95, 0.8], [0.7, 0.62, -0.45]],
+  dash: [[-0.05, 0.86, 0.55], [0.6, 0.66, -0.2]],
+  frunk: [[3.6, 2.0, 2.4], [1.3, 0.35, 0]],
   cockpit: [[0, 0, 0], [1, 0, 0]],
   under: [[1.5, -3.2, 3.2], [-0.2, 0.3, 0]],
 };
@@ -63,34 +67,54 @@ let v = views[q.get('view') || 'threeq'] || views.threeq;
 if (q.has('cam')) v = [q.get('cam').split(',').map(Number), (q.get('look') || '0,0.3,0').split(',').map(Number)];
 if (q.get('view') === 'cockpit') {
   cam.position.copy(car.cockpit).add(car.group.position);
-  cam.lookAt(cam.position.x + 5, cam.position.y - 0.4, cam.position.z);
-  cam.fov = 70;
+  cam.lookAt(cam.position.x + 12, COM_H - 1.0, cam.position.z);
+  cam.fov = num('fov', 64);
   cam.updateProjectionMatrix();
 } else {
   cam.position.set(...v[0]);
   cam.lookAt(...v[1]);
-  if (q.get('view') === 'interior') { cam.fov = 70; cam.updateProjectionMatrix(); }
+  if (q.get('view') === 'interior' || q.get('view') === 'dash') { cam.fov = num('fov', 70); cam.updateProjectionMatrix(); }
 }
 const controls = new OrbitControls(cam, renderer.domElement);
 controls.target.set(...v[1]);
-if (q.get('view') === 'cockpit') controls.enabled = false;
+if (q.get('view') === 'cockpit') {
+  controls.enabled = false;
+  cam.lookAt(cam.position.x + 12, COM_H - 1.0 + num('pitch', 0), cam.position.z + num('yaw', 0));
+}
 
 const st = {
   wheels: WHEELS.map((w) => ({ steer: w.front ? num('steer') : 0, spin: 0, y: -COM_H + SUSP.radius })),
   doors: num('doors'), wing: num('wing'), airbrake: num('airbrake'), lights: num('lights'), brake: num('brake'),
-  fans: num('fans'), nozzles: variant.nozzles.map(() => num('noz')), speed: 0,
+  fans: num('fans'), nozzles: variant.nozzles.map(() => num('noz')), speed: 0, frunk: num('frunk'), steer: num('steer'),
+  cockpit: q.get('view') === 'cockpit' || q.has('live'),
 };
+// demo telemetry for the screen: a lap trace and some live-looking values
+{
+  const tr = [];
+  for (let i = 0; i < 160; i++) {
+    const a = (i / 160) * Math.PI * 1.7;
+    tr.push({ x: Math.cos(a) * 120 + Math.sin(a * 3) * 18, z: Math.sin(a) * 70 });
+  }
+  const last = tr[tr.length - 1];
+  st.telemetry = {
+    ...DEMO_TEL, mph: num('mph', 54), gear: 'D', accel: 1, brake: 0, battT: 109, motorT: 200, brakeT: [1357, 1357, 958, 958],
+    tyres: [0, 1, 2, 3].map(() => ({ psi: 28, temp: 81 })), gx: 0.6, gy: -0.4, trace: tr, px: last.x, pz: last.z, hx: 0, hz: 1,
+    elev: 86, runs: [0.94, 1.02, 0.97], best: 0.94, last: 0.94, t60: 0.94, gas: 1, gasPsi: 5500, trackMode: true, fans: 0.5,
+    downforce: 1582, wing: true,
+  };
+}
 const clock = new THREE.Clock();
 let frames = 0;
 function frame() {
   const dt = Math.min(0.05, clock.getDelta());
   car.update(frames < 5 ? 2 : dt, st);
-  controls.update();
+  if (controls.enabled) controls.update();
   renderer.render(scene, cam);
   frames++;
   if (frames === 8) {
     window.__tris = renderer.info.render.triangles;
-    document.getElementById('info').textContent = `${variant.name} · tris ${window.__tris}`;
+    window.__calls = renderer.info.render.calls;
+    document.getElementById('info').textContent = `${variant.name} · tris ${window.__tris} · calls ${window.__calls}`;
     window.__ready = true;
   }
   requestAnimationFrame(frame);
