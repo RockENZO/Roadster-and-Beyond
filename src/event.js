@@ -75,6 +75,9 @@ export const SEGMENTS = [
         if (v.airborne) s.ph = 'fall';
       } else if (s.ph === 'fall') {
         c.lift = true; c.brake = v.pos.y > 5 ? 0.9 : 0.3;
+        // As in the clip: leave the lip upside down and barrel-roll upright about the car's long axis
+        // (no pitch flip), then let flight assist level it and hover down.
+        if (!s.flipped) { if (v.up.y < 0.4) c.roll = v.up.y < 0 ? 1 : 0.45; else s.flipped = true; }
         if (v.contacts >= 3) { s.ph = 'out'; s.tl = t; }
       } else {
         c.brake = Math.abs(v.vFwd) > 0.3 ? 0.5 : 0;
