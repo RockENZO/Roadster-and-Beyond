@@ -30,8 +30,9 @@ const LIFT = [
   { x: 0.8, z: 0.72 }, { x: 0.8, z: -0.72 }, { x: -1.92, z: 0.72 }, { x: -1.92, z: -0.72 },
 ].map((p) => ({ group: 'lift', x: p.x, y: -0.4, z: p.z, dir: [0, -1, 0] }));
 const NOSE = [
-  { group: 'nose', x: 1.92, y: -0.18, z: 0.8, dir: [0, 0, 1] },
-  { group: 'nose', x: 1.92, y: -0.18, z: -0.8, dir: [0, 0, -1] },
+  // the nose pair fires diagonally forward and out of the front corners, as in the kickflip footage
+  { group: 'nose', x: 1.92, y: -0.18, z: 0.8, dir: [0.45, 0, 0.893] },
+  { group: 'nose', x: 1.92, y: -0.18, z: -0.8, dir: [0.45, 0, -0.893] },
 ];
 
 // Points on the body shell used for collisions. roof marks points that mean a rollover if they touch.

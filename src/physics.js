@@ -473,7 +473,9 @@ export class Vehicle {
       const I = this.I, w = this.w;
       const Lmax = 4 * p.fLift;
       let L = 0;
-      if (this.hopT > 0) L = Lmax * 0.92;
+      // The hop fires the lift jets along the car's own up axis; the flight computer scales them by how
+      // upright the car is, so a roll during the hop doesn't shove the car sideways off its line.
+      if (this.hopT > 0) L = Lmax * 0.92 * clamp(upW.y, 0, 1);
       else if (inp.lift && airborne && upW.y > 0.15) {
         const vyT = 5 * (inp.throttle || 0) - 6 * (inp.brake || 0);
         L = clamp(m * (G + 3 * (vyT - this.vel.y)) / Math.max(upW.y, 0.35), 0, Lmax);
@@ -510,19 +512,31 @@ export class Vehicle {
           cy = 0;
         } // else: hold the current attitude (zero rates) while lift is firing
 
+        // Heading hold (flight assist): keep the nose on the heading it left the ground with, so a roll
+        // or flip flies a straight line. Applied through whichever body axis currently points up.
+        if (assist && Math.abs(inp.yaw) < 0.08) {
+          const hd = Math.atan2(-this.fwd.z, this.fwd.x);
+          if (this.hdgRef == null) this.hdgRef = hd;
+          let e = this.hdgRef - hd;
+          e = Math.atan2(Math.sin(e), Math.cos(e));
+          const wy = clamp(3 * e, -1.5, 1.5);
+          cy += upW.y * wy;
+        } else this.hdgRef = null;
         const K = 9;
         const tx = I.x * K * (cx - w.x), ty = I.y * K * (cy - w.y), tz = I.z * K * (cz - w.z);
         // Allocate total lift L, pitch torque tz and roll torque tx across the four lift nozzles
-        // (FR, FL, RR, RL). Gas can only push, so any negative share is lifted by adding a
-        // torque-free mix (front xr : rear xf) until every nozzle is at or above zero.
+        // (FR, FL, RR, RL) with as little total thrust as possible, since gas can only push and every
+        // newton of it also shoves the car along its up axis. Pitch sets the front and rear pair totals;
+        // roll is a split within each pair, shared front:rear as xr:xf so it adds no pitch. If a pair
+        // can't make its split, both totals rise by the torque-free mix (front xr : rear xf).
         const xf = 0.8, xr = 1.92, zz = 0.72, span = xf + xr;
-        const Ff = (xr * L + tz) / span, Fr = (xf * L - tz) / span;
-        const a = -tx / (4 * zz);
-        const F = [Ff / 2 + a, Ff / 2 - a, Fr / 2 + a, Fr / 2 - a];
-        const v0 = [xr, xr, xf, xf];
-        let lam = 0;
-        for (let i = 0; i < 4; i++) if (F[i] < 0) lam = Math.max(lam, -F[i] / v0[i]);
-        for (let i = 0; i < 4; i++) F[i] += lam * v0[i];
+        let Ff = (xr * L + tz) / span, Fr = (xf * L - tz) / span;
+        let lam = Math.max(0, -Ff / xr, -Fr / xf);
+        Ff += lam * xr; Fr += lam * xf;
+        const A = -tx / (2 * zz), af = A * xr / span, ar = A * xf / span;
+        lam = Math.max(0, (2 * Math.abs(af) - Ff) / xr, (2 * Math.abs(ar) - Fr) / xf);
+        Ff += lam * xr; Fr += lam * xf;
+        const F = [Ff / 2 + af, Ff / 2 - af, Fr / 2 + ar, Fr / 2 - ar];
         const lim = p.fLift;
         let li = 0;
         for (const n of p.nozzles) {
@@ -532,7 +546,7 @@ export class Vehicle {
         // Yaw from the nose pair: right nozzle (exhaust +z) yaws the nose left (+y).
         for (const n of p.nozzles) {
           if (n.group !== 'nose') continue;
-          const want = ty / (1.92 * p.fNose);
+          const want = ty / (1.35 * p.fNose); // yaw arm of a diagonal nose jet: 1.92*0.893 - 0.8*0.45
           u[n.id] = n.dir.z > 0 ? clamp(want, 0, 1) : clamp(-want, 0, 1);
         }
       }

@@ -109,7 +109,10 @@ export const SEGMENTS = [
       } else if (s.ph === 'air') {
         const a = t - s.th;
         c.lift = a < 0.42;
-        c.roll = a > 0.25 && a < 1.05 ? 1 : 0;
+        // Hold the roll for nearly the whole turn so the jets only push hard while the car is near
+        // upright (spin-up and the final catch); flight assist stops it level on the same heading.
+        s.rolled = (s.rolled || 0) + Math.abs(v.w.x) / 20;
+        c.roll = a > 0.4 && s.rolled < 2 * Math.PI - 0.75 ? 0.85 : 0;
         if (a > 0.6 && v.contacts >= 2) { s.ph = 'out'; s.tl = t; s.m1 = s.f; }
       } else {
         c.brake = v.vFwd > 0.3 ? 0.55 : 0;
