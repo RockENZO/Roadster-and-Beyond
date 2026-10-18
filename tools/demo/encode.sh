@@ -4,7 +4,7 @@
 # usage: tools/demo/encode.sh <frames-dir> [gif-select-expression]
 set -e
 F="${1:?frames dir}"
-SEL="${2:-between(n,30,200)+between(n,600,830)+between(n,960,1240)+between(n,1320,1560)+between(n,1859,1969)}"
+SEL="${2:-between(n,30,200)+between(n,640,790)+between(n,940,1240)+between(n,1300,1560)+between(n,1806,1916)}"
 ffmpeg -loglevel error -y -framerate 20 -i "$F/%05d.jpg" \
   -c:v libx264 -pix_fmt yuv420p -crf 24 -preset slow -vf "scale=854:-2" -movflags +faststart docs/demo.mp4
 ffmpeg -loglevel error -y -framerate 20 -i "$F/%05d.jpg" \
