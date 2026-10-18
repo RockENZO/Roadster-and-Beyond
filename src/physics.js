@@ -17,6 +17,8 @@ const VMAX = 104;         // ~232 mph governor
 const G0 = 9.80665;
 const RHO = 1.2;
 const CDA = 0.55;
+const LAUNCH_G = 2.05;    // motor force ceiling at low speed, about what the tyres hold with launch suction
+const FAN_MAX = 1;        // fan boost: full suction on any surface, the 4,700 kg the broadcast showed
 
 const V = () => new THREE.Vector3();
 const _a = V(), _b = V(), _c = V(), _d = V(), _e = V(), _f = V(), _n = V(), _r = V(), _vp = V(), _t = V(), _s = V();
@@ -164,6 +166,7 @@ export class Vehicle {
     this.nozzleU.fill(0);
     this.steer = 0;
     this.trackMode = this.trackMode || false;
+    this.fanBoost = this.fanBoost || false;
     this.releaseT = 0;
     this.revT = 0;
     this.hopT = 0;
@@ -238,7 +241,12 @@ export class Vehicle {
     this.events.length = 0;
     if (this.mode !== 'crashed') {
       if (pressed.track) { this.trackMode = !this.trackMode; this.events.push({ type: 'track', on: this.trackMode }); }
-      if (pressed.release) { this.releaseT = 1.2; this.events.push({ type: 'fans-off' }); }
+      // LB / F: on the wall it cuts the fans so the car drops; on the road it toggles fan boost,
+      // full suction for maximum grip (Tesla: the fans pull the car down for more traction).
+      if (pressed.release) {
+        if (this.onWall || this.steepNow) { this.releaseT = 1.2; this.events.push({ type: 'fans-off' }); }
+        else { this.fanBoost = !this.fanBoost; this.events.push({ type: 'fans', on: this.fanBoost }); }
+      }
       if (pressed.lift && this.p.fLift && !this.airborne && this.gas > 5) { this.hopT = 0.6; this.hopAge = 0; this.events.push({ type: 'hop' }); }
       // A tap is a short hop; holding the button stretches it to full height.
       if (this.hopT > 0 && !inp.lift && this.hopAge > 0.3) this.hopT = 0;
@@ -291,11 +299,14 @@ export class Vehicle {
     for (const w of this.wheels) if (w.contact) { nAvg.add(w.n); nc++; }
     if (nc) nAvg.normalize();
     const steep = nc ? nAvg.y < 0.6 : false;
+    this.steepNow = steep;
     let target = 0;
     if (nc >= 2 && this.releaseT <= 0) {
       target = 0.24 * m / SUCTION_KG;
       if (this.trackMode) target = 0.5;
-      if (drive > 0.5 && Math.abs(vF) < 30) target = Math.max(target, 0.44 * m / SUCTION_KG);
+      if (this.fanBoost) target = FAN_MAX;
+      // Launch suction rises with the pedal instead of switching on at half throttle.
+      if (drive > 0 && Math.abs(vF) < 30) target = Math.max(target, (0.24 + 0.2 * clamp((drive - 0.2) / 0.5, 0, 1)) * m / SUCTION_KG);
       if (speed > 15) target = Math.max(target, 0.45 * Math.min(1, Math.abs(this.steer) / 0.12));
       if (brake > 0.3) target = Math.max(target, 0.5);
       if (steep || this.onWall) target = 1;
@@ -321,7 +332,7 @@ export class Vehicle {
     const maxT = SUSP.rest + SUSP.radius;
     let contacts = 0;
     const totalDrive = drive > 0
-      ? drive * Math.min(m * 30, POWER / Math.max(Math.abs(vF), 1)) * (vF > VMAX ? 0 : 1)
+      ? drive * Math.min(m * G0 * LAUNCH_G, POWER / Math.max(Math.abs(vF), 1)) * (vF > VMAX ? 0 : 1)
       : drive * m * 8 * (vF < -14 ? 0 : 1);
     for (let i = 0; i < 4; i++) {
       const w = this.wheels[i];

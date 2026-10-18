@@ -14,6 +14,9 @@ function radial(x, y, dead) {
 // Response curve: gentle near centre, full lock at the edge.
 const curve = (v, e) => Math.sign(v) * Math.pow(Math.abs(v), e);
 const trig = (v) => (v < TRIGGER_DEAD ? 0 : Math.min(1, (v - TRIGGER_DEAD) / (1 - TRIGGER_DEAD * 2)));
+// Some browser/pad pairs (non-standard mapping, e.g. Firefox or Safari on macOS) report the triggers
+// as digital buttons and put the analog travel on an axis running -1 (released) to 1 (pressed).
+// Untouched axes read 0 until their first event, so 0 with the button up counts as released.
 // Move v toward t: slower when steering into a turn, quicker when centring or reversing.
 const approach = (v, t, up, back, dt) => {
   const r = t === 0 || Math.sign(t) !== Math.sign(v) ? back : up;
@@ -36,6 +39,7 @@ export class Input {
     this.kThrottle = 0;
     this.kBrake = 0;
     this.rumbleNext = 0;
+    this.trigAxis = {};   // per-pad: axis index found to carry each trigger
     addEventListener('keydown', (e) => {
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
       if (e.repeat) return;
@@ -59,6 +63,24 @@ export class Input {
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
     for (const g of pads) if (g && g.connected) return g;
     return null;
+  }
+
+  // Analog trigger travel 0..1. Standard-mapped pads give it on the button's value; otherwise look
+  // for the axis that moves while the button is held, and use that from then on.
+  trigger(g, bi, side) {
+    const btn = g.buttons[bi];
+    const v = btn ? btn.value : 0;
+    if (g.mapping === 'standard' || (v > 0 && v < 1)) return v;
+    const key = g.index + side;
+    let ai = this.trigAxis[key];
+    if (ai === undefined && btn?.pressed) {
+      const other = this.trigAxis[g.index + (side === 'rt' ? 'lt' : 'rt')];
+      ai = [2, 3, 4, 5, 6, 7].find((i) => i < g.axes.length && i !== other && g.axes[i] > 0.3);
+      this.trigAxis[key] = ai ?? null;
+    }
+    if (ai == null) return v;
+    const a = g.axes[ai];
+    return a === 0 && !btn?.pressed ? 0 : (a + 1) / 2;
   }
 
   // One-shot jolt (landings, crashes).
@@ -122,8 +144,8 @@ export class Input {
     if (g) {
       [lx, ly] = radial(g.axes[0] || 0, g.axes[1] || 0, STICK_DEAD);
       [rx, ry] = radial(g.axes[2] || 0, g.axes[3] || 0, STICK_DEAD);
-      rt = trig(g.buttons[7] ? g.buttons[7].value : 0);
-      lt = trig(g.buttons[6] ? g.buttons[6].value : 0);
+      rt = trig(this.trigger(g, 7, 'rt'));
+      lt = trig(this.trigger(g, 6, 'lt'));
       if (Math.abs(lx) + Math.abs(ly) + Math.abs(rx) + Math.abs(ry) + rt + lt > 0.3 || g.buttons.some((x) => x.pressed)) this.setDevice('pad');
     }
     // Keyboard: ramp the digital keys so steering and pedals behave like analog inputs.

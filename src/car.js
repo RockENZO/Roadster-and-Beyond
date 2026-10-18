@@ -5,7 +5,7 @@ import { WHEELS, FANS, SUSP, COM_H } from './spec.js';
 import { CockpitScreen } from './screen.js';
 
 // Low-poly model of the 2026 Roadster, built from the official launch photos and the close-look
-// video: satin white faceted wedge, nose light line, pop-up lamps in the hood seams, hood vent,
+// video: satin white faceted wedge, nose light line, headlamps under sinking triangular hood panels, hood vent,
 // opening front lid over the carbon gas sphere, butterfly doors, six-spoke wheels on aero discs,
 // full-width tail bar, diffuser with four cold-gas nozzles over four suction-fan bays, and the
 // active wing on swan-neck struts. Inside: white buckets with lit badges, a dark alcantara dash
@@ -57,6 +57,12 @@ const REAR_GLASS_END = -1.75;
 const DOOR_FRONT = 0.84;
 const DOOR_REAR = -0.28;
 const LID_FRONT = 1.98; // front lid: the hood panel between the two lamp seams
+// Headlamps: on each front corner the hood facet between the lid seam (R) and the side crease (G)
+// is a long triangle from the nose tip back to a short cross seam here. Lights on, the panel pivots
+// on its tip and its rear edge sinks, showing the lamp bar on the back wall of the recess.
+const LAMP_X = 1.72;
+const LAMP_SINK = 0.045; // how far the rear edge drops (m)
+const LAMP_DEPTH = 0.065; // recess depth under the panel
 // Rear trunk lid over the gas sphere: the deck and rear glass behind the cabin, hinged at its rear
 // edge just ahead of the wing; the front edge swings up tall.
 const TRUNK_FRONT = SIDE_GLASS_REAR, TRUNK_HINGE = -1.64;
@@ -353,6 +359,8 @@ export class RoadsterModel {
       red: new THREE.MeshBasicMaterial({ color: 0xc00006, toneMapped: false }),
       amber: new THREE.MeshStandardMaterial({ color: 0x331800, emissive: 0xff8a10, emissiveIntensity: 1.4 }),
       head: new THREE.MeshStandardMaterial({ color: 0x15171a, emissive: 0xeaf2ff, emissiveIntensity: 0 }),
+      chrome: new THREE.MeshStandardMaterial({ color: 0xc8ccd0, metalness: 1, roughness: 0.15 }),
+      recess: new THREE.MeshStandardMaterial({ color: 0x1a1c1f, metalness: 0.2, roughness: 0.6, side: THREE.DoubleSide }),
       plateLight: new THREE.MeshStandardMaterial({ color: 0x222222, emissive: 0xffffff, emissiveIntensity: 1.6 }),
       ambient: new THREE.MeshStandardMaterial({ color: 0x300000, emissive: 0xff1a22, emissiveIntensity: 1.8 }),
       underglow: new THREE.MeshBasicMaterial({
@@ -372,7 +380,7 @@ export class RoadsterModel {
     const xs = KEYS.map((k) => k[0]);
     const axles = [WHEELS[0].x, WHEELS[2].x];
     for (const wx of axles) for (let i = 1; i < 10; i++) xs.push(wx + ARCH_R * Math.cos((i / 10) * PI));
-    xs.push(TRUNK_HINGE);
+    xs.push(TRUNK_HINGE, LAMP_X);
     const archY = (x) => {
       for (const wx of axles) {
         const dx = (x - wx) / ARCH_R;
@@ -412,6 +420,7 @@ export class RoadsterModel {
     const doorMesh = [new Mesher(), new Mesher()];
     const lidMesh = new Mesher();
     const trunkMesh = new Mesher();
+    const lampMesh = [new Mesher(), new Mesher()];
     const V = (st, k, side) => [st.x + (st.skew ? st.skew[k] : 0), st.pts[k][0], st.pts[k][1] * side];
     const ST = this.stations;
     for (let si = 0; si < ST.length - 1; si++) {
@@ -427,9 +436,14 @@ export class RoadsterModel {
         const door = k >= 3 && k <= 6 && xm < DOOR_FRONT && xm > DOOR_REAR;
         const lid = k === 7 && xm < LID_FRONT && xm > WIN_FRONT;
         const trunk = (k === 6 || k === 7) && xm < TRUNK_FRONT && xm > TRUNK_HINGE;
+        const lamp = k === 6 && xm > LAMP_X;
         for (let side = 1; side >= -1; side -= 2) {
           const a = V(s0, k, side), b = V(s0, k + 1, side);
           const c = V(s1, k + 1, side), d = V(s1, k, side);
+          if (lamp) {
+            if (side > 0) lampMesh[0].quad(key, a, b, c, d); else lampMesh[1].quad(key, a, d, c, b);
+            continue;
+          }
           const target = door ? doorMesh[side > 0 ? 0 : 1] : lid ? lidMesh : trunk ? trunkMesh : mesh;
           const inner = door ? 'doorIn' : 'liner';
           if (side > 0) {
@@ -464,6 +478,7 @@ export class RoadsterModel {
       parent.add(o);
       return o;
     };
+    this.lampMesh = lampMesh;
     add(mesh.geometry('paint'), this.mat.paint);
     add(mesh.geometry('black'), this.mat.black);
     add(mesh.geometry('nose'), this.mat.nose);
@@ -605,7 +620,7 @@ export class RoadsterModel {
       vb.bar('paint', new THREE.Vector3(x0 + 0.015, topY(x0, 0) + 0.012, -zf - 0.02), new THREE.Vector3(x0 + 0.015, topY(x0, zf) + 0.012, zf + 0.02), 0.03, 0.035);
       vb.build(lidIn, this.mat);
     }
-    // Lid shut lines (the seams the pop-up lamps rise from).
+    // Lid shut lines.
     for (const side of [1, -1]) {
       const p0 = sectionAt(LID_FRONT), p1 = sectionAt(WIN_FRONT + 0.01);
       m.add(barBetween(new THREE.Vector3(LID_FRONT, p0[R][0] + 0.004, p0[R][1] * side), new THREE.Vector3(WIN_FRONT + 0.01, p1[R][0] + 0.004, p1[R][1] * side), 0.008, 0.006, this.mat.black));
@@ -615,43 +630,74 @@ export class RoadsterModel {
       m.add(barBetween(new THREE.Vector3(LID_FRONT, p0[T][0] + 0.004, -p0[R][1]), new THREE.Vector3(LID_FRONT, p0[T][0] + 0.004, p0[R][1]), 0.008, 0.006, this.mat.black));
     }
 
-    // Pop-up lamps: a panel in each hood seam, hinged at its rear edge; the front edge lifts and
-    // the lamp block rises out of the slit under it.
+    // Headlamps (see LAMP_X): the triangular corner panel pivots on its nose tip and the rear edge
+    // sinks into a dark recess, uncovering the lamp bar across the recess's back wall.
+    const lampStations = ST.filter((st) => st.x >= LAMP_X - 1e-6);
+    const rb = new Batch();
     for (const side of [1, -1]) {
-      const xa = 1.9, xb = 1.5;
-      const sa = sectionAt(xa), sb = sectionAt(xb);
-      const zIn = (s) => s[R][1] + 0.02, zOut = (s) => s[G][1] - 0.025;
-      const yOn = (s, z) => lerp(s[R][0], s[G][0], (z - s[R][1]) / (s[G][1] - s[R][1])) + 0.005;
-      const corners = [
-        [xa, yOn(sa, zIn(sa)), zIn(sa) * side], [xa, yOn(sa, zOut(sa)), zOut(sa) * side],
-        [xb, yOn(sb, zOut(sb)), zOut(sb) * side], [xb, yOn(sb, zIn(sb)), zIn(sb) * side],
-      ];
-      const hinge = new THREE.Vector3(xb, (corners[2][1] + corners[3][1]) / 2, (corners[2][2] + corners[3][2]) / 2);
-      const mf = new Mesher();
-      mf.slab('p', 'b', 'b', corners, [0, 1, 0], 0.012);
+      const vec = (p) => new THREE.Vector3(p[0], p[1], p[2]);
+      const edge = (k) => lampStations.map((st) => new THREE.Vector3(st.x, st.pts[k][0], st.pts[k][1] * side));
+      const rIn = edge(R), gOut = edge(G); // front to rear
+      const tip = rIn[0].clone().lerp(gOut[0], 0.5);
+      const rR = rIn[rIn.length - 1], gR = gOut[gOut.length - 1];
+      const rearMid = rR.clone().lerp(gR, 0.5);
+      const len = tip.distanceTo(rearMid);
+      const n = new THREE.Vector3().crossVectors(gR.clone().sub(tip), rR.clone().sub(tip)).normalize();
+      if (n.y < 0) n.negate();
+      const along = rearMid.clone().sub(tip).normalize();
+      const axis = new THREE.Vector3().crossVectors(along, n).normalize();
+
+      // the panel, with dark shut lines along its three edges
       const pivot = new THREE.Group();
-      pivot.position.copy(hinge);
+      pivot.position.copy(tip);
       const inner = new THREE.Group();
-      inner.position.copy(hinge).negate();
+      inner.position.copy(tip).negate();
       pivot.add(inner);
-      inner.add(new THREE.Mesh(mf.geometry('p'), this.mat.paint), new THREE.Mesh(mf.geometry('b'), this.mat.black));
-      // lamp block under the front of the panel: dark housing with a bright lens facing forward
-      const zc = (corners[0][2] + corners[1][2]) / 2, yc = (corners[0][1] + corners[1][1]) / 2;
-      const wz = Math.abs(corners[1][2] - corners[0][2]) - 0.02;
-      const housing = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.05, wz), this.mat.head);
-      housing.position.set(xa - 0.055, yc - 0.035, zc);
-      const lens = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.042, wz - 0.012), this.mat.head);
-      lens.position.set(xa - 0.008, yc - 0.033, zc);
-      inner.add(housing, lens);
+      const pm = this.lampMesh[side > 0 ? 0 : 1];
+      inner.add(new THREE.Mesh(pm.geometry('paint'), this.mat.paint));
+      const up = n.clone().multiplyScalar(0.003);
+      for (const line of [rIn, gOut]) {
+        for (let i = 0; i < line.length - 1; i++) {
+          if (line[i].distanceTo(line[i + 1]) < 1e-4) continue;
+          inner.add(barBetween(line[i].clone().add(up), line[i + 1].clone().add(up), 0.006, 0.004, this.mat.black));
+        }
+      }
+      inner.add(barBetween(rR.clone().add(up), gR.clone().add(up), 0.006, 0.004, this.mat.black));
       m.add(pivot);
-      this.pods.push(pivot);
+      this.pods.push({ pivot, axis, angle: LAMP_SINK / len });
+
+      // recess: walls hanging below each edge and a floor, all dark
+      const mr = new Mesher();
+      const down = (v) => [v.x, v.y - LAMP_DEPTH, v.z];
+      const P3 = (v) => [v.x, v.y, v.z];
+      for (let i = 0; i < rIn.length - 1; i++) {
+        mr.quadHint('w', P3(rIn[i]), P3(rIn[i + 1]), down(rIn[i + 1]), down(rIn[i]), [0, 0, side]);
+        mr.quadHint('w', P3(gOut[i]), P3(gOut[i + 1]), down(gOut[i + 1]), down(gOut[i]), [0, 0, -side]);
+        mr.quadHint('w', down(rIn[i]), down(rIn[i + 1]), down(gOut[i + 1]), down(gOut[i]), [0, 1, 0]);
+      }
+      mr.quadHint('w', P3(rR), P3(gR), down(gR), down(rR), [1, 0, 0]);
+      const rec = new THREE.Mesh(mr.geometry('w'), this.mat.recess);
+      rec.userData.shadow = false;
+      m.add(rec);
+
+      // lamp bar on the back wall: a slim chrome bezel over a bright lens strip, following the cross seam
+      const off = (v, dy, dx) => [v.x + dx, v.y + dy, v.z - side * 0.006];
+      const offO = (v, dy, dx) => [v.x + dx, v.y + dy, v.z + side * 0.004];
+      const ml = new Mesher();
+      ml.quadHint('l', off(rR, -0.016, 0.004), offO(gR, -0.016, 0.004), offO(gR, -0.034, 0.004), off(rR, -0.034, 0.004), [1, 0, 0]);
+      ml.quadHint('c', off(rR, -0.008, 0.005), offO(gR, -0.008, 0.005), offO(gR, -0.015, 0.005), off(rR, -0.015, 0.005), [1, 0, 0]);
+      m.add(new THREE.Mesh(ml.geometry('l'), this.mat.head), new THREE.Mesh(ml.geometry('c'), this.mat.chrome));
+      // a light reflector behind the lens, so the glow reads through the gap from the side as well
+      rb.bar('head', rR.clone().add(new THREE.Vector3(0.012, -0.04, -side * 0.01)), gR.clone().add(new THREE.Vector3(0.012, -0.04, side * 0.006)), 0.006, 0.01);
+
       const spot = new THREE.SpotLight(0xeef4ff, 0, 90, 0.42, 0.55, 1.1);
       spot.castShadow = false;
-      spot.position.set(xa, yc, zc);
-      spot.target.position.set(xa + 25, -0.6, 0.9 * side);
+      spot.position.set(rearMid.x + 0.02, rearMid.y - 0.025, rearMid.z);
+      spot.target.position.set(rearMid.x + 25, -0.6, 0.9 * side);
       m.add(spot, spot.target);
       this.headLights.push(spot);
     }
+    rb.build(m, this.mat);
 
     // Behind the front wheel: the amber marker in a dark slot at the top of the door seam, and the
     // vertical air-outlet gap between the arch and the door.
@@ -1225,9 +1271,9 @@ export class RoadsterModel {
       sp.visible = lift > 0.1 && len > 0.005;
       sp.scale.y = Math.max(0.001, len);
     }
-    // lights: lamp panels lift from the hood seams
+    // lights: the corner panels sink and uncover the lamp bars
     s.lights = ease(s.lights, clamp01(st.lights || 0), 6, dt);
-    for (const p of this.pods) p.rotation.z = 0.24 * s.lights;
+    for (const p of this.pods) p.pivot.quaternion.setFromAxisAngle(p.axis, -p.angle * s.lights);
     this.mat.head.emissiveIntensity = 6 * s.lights;
     this.mat.drl.emissiveIntensity = 2.2 + 2.5 * s.lights;
     for (const h of this.headLights) h.intensity = 160 * s.lights;

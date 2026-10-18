@@ -160,11 +160,11 @@ function renderHints() {
   $('hints').innerHTML = pad
     ? `<div>${k('RT')} / ${k('LT')} <b>Throttle / brake</b> (hold ${k('LT')} at a stop to reverse) &nbsp; ${k('L stick')} <b>Steer</b></div>
        ${gas}
-       <div>${k('X')} <b>Track Mode</b> &nbsp; ${k('LB')} <b>Fans off</b> (drop from the wall) &nbsp; ${k('B')} <b>Handbrake</b></div>
+       <div>${k('X')} <b>Track Mode</b> &nbsp; ${k('LB')} <b>Fan boost</b> (on the wall: fans off) &nbsp; ${k('B')} <b>Handbrake</b></div>
        <div>${k('Y')} Camera &nbsp; ${k('R stick')} Look &nbsp; ${k('D-pad')} ${k('↑')} Lights ${k('↓')} Doors ${k('←')}${k('→')} Stunts &nbsp; ${k('View')} Respawn &nbsp; ${k('LS')} Hide help</div>`
     : `<div>${k('W')} ${k('S')} <b>Throttle / brake</b> (hold ${k('S')} at a stop to reverse) &nbsp; ${k('A')} ${k('D')} <b>Steer</b></div>
        ${gas}
-       <div>${k('T')} <b>Track Mode</b> &nbsp; ${k('F')} <b>Fans off</b> (drop from the wall) &nbsp; ${k('B')} <b>Handbrake</b></div>
+       <div>${k('T')} <b>Track Mode</b> &nbsp; ${k('F')} <b>Fan boost</b> (on the wall: fans off) &nbsp; ${k('B')} <b>Handbrake</b></div>
        <div>${k('C')} Camera &nbsp; ${k('L')} Lights &nbsp; ${k('O')} Doors &nbsp; ${k('K')} Trunk &nbsp; ${k('1')}-${k('5')} Stunts &nbsp; ${k('R')} Respawn &nbsp; ${k('H')} Hide help &nbsp; ${k('M')} Mute &nbsp; ${k('Esc')} Menu</div>`;
 }
 input.onDevice = (d) => { renderHints(); menuHint(); toast(d === 'pad' ? `Controller active${input.padName ? ': ' + input.padName.replace(/\(.*\)/, '').trim() : ''}` : 'Keyboard active'); };
@@ -300,6 +300,7 @@ function handleEvents() {
       case 'wall': if (!show.active) setCaption('Vertical wall climb', 4); popup('SUCTION ON', false); sound.burst(0.4, 3000, 0.3); break;
       case 'hang': if (!show.active) setCaption('Holding upside down', 4); popup('HANGING UPSIDE DOWN', true); vehicle.hungBefore = true; sound.ding(); break;
       case 'fans-off': popup('FANS OFF', false); break;
+      case 'fans': popup(ev.on ? 'FAN BOOST ON' : 'FAN BOOST OFF', ev.on); toast(ev.on ? 'Fan boost: full suction, maximum grip' : 'Fans back to auto'); break;
       case 'track': toast(ev.on ? 'Track Mode: lower, stiffer, wing up, more suction' : 'Track Mode off'); break;
       case 'hop': sound.burst(0.35, 2600, 0.45); input.rumble(0.6, 0.8, 160); break;
       case 'release': if (!show.active) setCaption('Flight off the ramp', 4); break;
@@ -603,7 +604,7 @@ function update(dt) {
     run = true;
     if (P.pause) openMenu();
     if (P.camera) { camMode = (camMode + 1) % CAMS.length; toast(CAMS[camMode]); }
-    if (P.lights) { lights = !lights; toast(lights ? 'Headlights up' : 'Headlights hidden'); }
+    if (P.lights) { lights = !lights; toast(lights ? 'Headlights on: corner panels drop' : 'Headlights off'); }
     if (P.doors) { mst.doorsT = mst.doorsT ? 0 : 1; if (Math.abs(vehicle.vFwd) > 3) toast('Stop to open the doors'); }
     if (P.frunk) { mst.frunkT = mst.frunkT ? 0 : 1; if (Math.abs(vehicle.vFwd) > 3) toast('Stop to open the trunk'); }
     if (P.hints) $('hints').classList.toggle('off');
