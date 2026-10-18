@@ -943,9 +943,10 @@ export class RoadsterModel {
     }
     b.build(m, this.mat);
 
-    // yoke: a squared stadium loop. Thick white outer shell with soft corners, flatter top and
-    // bottom, tall grips; the deep inner face of the rim is dark grey. A large grey rounded-square
-    // pad fills most of the opening on short spokes carrying black button clusters.
+    // yoke: a squared sideways figure 8 (a boxy infinity sign), as in the closer-look video. Two tall
+    // white grip loops joined through the middle by a shallower bridge, so the top and bottom edges dip
+    // between the grips; each loop has its own opening with a dark grey inner lining. A large grey
+    // pillowed pad sits on the bridge, with black button clusters on spokes across each opening.
     const yokeMount = new THREE.Group();
     yokeMount.position.set(0.32, 0.125, z0);
     yokeMount.rotation.z = -0.2; // top leans forward, column runs forward and down
@@ -953,33 +954,68 @@ export class RoadsterModel {
     yokeMount.add(yoke);
     {
       const yb = new Batch();
-      // about 1.35:1, slim top and bottom bars, tall grips only slightly thicker, deep front to back
-      const W = 0.32, H = 0.237, depth = 0.085, gw = 0.036, bh = 0.024;
-      const iw = W - 2 * gw, ih = H - 2 * bh; // opening
+      const H = 0.23, Hw = 0.196, x1 = 0.05, x2 = 0.172, rO = 0.03, f = 0.01, depth = 0.07;
       const ext = (shape, d, bevel) => {
-        const g = new THREE.ExtrudeGeometry(shape, { depth: d, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 12 });
+        const g = new THREE.ExtrudeGeometry(shape, { depth: d, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 10 });
         g.translate(0, 0, -d / 2);
         g.rotateY(PI / 2);
         return g;
       };
-      // white outer shell wrapping the outside edge
-      const shell = roundRect(new THREE.Shape(), W - 0.008, H - 0.008, 0.075);
-      shell.holes.push(roundRect(new THREE.Path(), iw + 0.004, ih + 0.004, 0.045));
-      yb.add('white', ext(shell, depth - 0.008, 0.004));
-      // dark grey inner lining: a wide band when seen at an angle
-      const lining = roundRect(new THREE.Shape(), iw + 0.006, ih + 0.006, 0.046);
-      lining.holes.push(roundRect(new THREE.Path(), iw - 0.004, ih - 0.004, 0.042));
-      yb.add('trim', ext(lining, depth - 0.012, 0));
-      // centre pad: small dark-grey pillowed square, ~40% of the opening's width and 60% of its height,
-      // slightly proud of the rim toward the driver
-      const pw = iw * 0.5, ph = ih * 0.8;
-      yb.rbox('padGray', 0.045, ph, pw, 0.02, -0.03, 0, 0);
-      yb.rbox('padGray', 0.02, ph - 0.024, pw - 0.024, 0.01, -0.05, 0, 0);
+      // outer outline: right lobe, then the mirrored left lobe, joined by the bridge (|y| <= Hw/2)
+      const half = (sh, sx) => {
+        const X = (x) => x * sx;
+        sh.lineTo(X(x1 - f), Hw / 2);
+        sh.quadraticCurveTo(X(x1), Hw / 2, X(x1), Hw / 2 + f * 0.6);
+        sh.quadraticCurveTo(X(x1), H / 2, X(x1 + rO), H / 2);
+        sh.lineTo(X(x2 - rO), H / 2);
+        sh.quadraticCurveTo(X(x2), H / 2, X(x2), H / 2 - rO);
+        sh.lineTo(X(x2), -H / 2 + rO);
+        sh.quadraticCurveTo(X(x2), -H / 2, X(x2 - rO), -H / 2);
+        sh.lineTo(X(x1 + rO), -H / 2);
+        sh.quadraticCurveTo(X(x1), -H / 2, X(x1), -Hw / 2 - f * 0.6);
+        sh.quadraticCurveTo(X(x1), -Hw / 2, X(x1 - f), -Hw / 2);
+      };
+      const outline = new THREE.Shape();
+      outline.moveTo(0, Hw / 2);
+      half(outline, 1);
+      outline.lineTo(0, -Hw / 2);
+      // left lobe, walked bottom to top so the outline stays one loop
+      const X = (x) => -x;
+      outline.lineTo(X(x1 - f), -Hw / 2);
+      outline.quadraticCurveTo(X(x1), -Hw / 2, X(x1), -Hw / 2 - f * 0.6);
+      outline.quadraticCurveTo(X(x1), -H / 2, X(x1 + rO), -H / 2);
+      outline.lineTo(X(x2 - rO), -H / 2);
+      outline.quadraticCurveTo(X(x2), -H / 2, X(x2), -H / 2 + rO);
+      outline.lineTo(X(x2), H / 2 - rO);
+      outline.quadraticCurveTo(X(x2), H / 2, X(x2 - rO), H / 2);
+      outline.lineTo(X(x1 + rO), H / 2);
+      outline.quadraticCurveTo(X(x1), H / 2, X(x1), Hw / 2 + f * 0.6);
+      outline.quadraticCurveTo(X(x1), Hw / 2, X(x1 - f), Hw / 2);
+      outline.lineTo(0, Hw / 2);
+      // one opening per lobe: between the pad and the grip, under the slim top and bottom bars
+      const hx0 = 0.05, hx1 = x2 - 0.026, hh = Hw - 0.03, hc = (hx0 + hx1) / 2, hw = hx1 - hx0;
+      const hole = (sx, grow, P) => {
+        const sh = roundRect(P, hw + grow, hh + grow, 0.026 + grow / 2);
+        const pts = sh.getPoints(10).map((v) => new THREE.Vector2(v.x + sx * hc, v.y));
+        return pts;
+      };
+      for (const sx of [1, -1]) outline.holes.push(new THREE.Path(hole(sx, 0.004, new THREE.Path())));
+      yb.add('white', ext(outline, depth - 0.008, 0.004));
+      // dark grey inner lining of each opening, a wide band when seen at an angle
+      for (const sx of [1, -1]) {
+        const ring = new THREE.Shape(hole(sx, 0.006, new THREE.Shape()));
+        ring.holes.push(new THREE.Path(hole(sx, -0.006, new THREE.Path())));
+        yb.add('trim', ext(ring, depth - 0.012, 0));
+      }
+      // large pillowed centre pad on the bridge, slightly proud of the rim toward the driver
+      const pw = 0.12, ph = 0.165;
+      yb.rbox('padGray', 0.045, ph, pw, 0.026, -0.03, 0, 0);
+      yb.rbox('padGray', 0.02, ph - 0.026, pw - 0.026, 0.012, -0.05, 0, 0);
       for (const s of [1, -1]) {
-        // horizontal spoke bridging the gap to the grip, carrying a black button cluster
-        const z0s = pw / 2 - 0.004, z1s = iw / 2 + 0.004, zc = (z0s + z1s) / 2;
-        yb.rbox('alcantara', 0.028, 0.034, z1s - z0s, 0.008, -0.012, -0.004, s * zc);
-        yb.rbox('gloss', 0.008, 0.03, 0.04, 0.005, -0.028, -0.002, s * (zc - 0.004));
+        // horizontal spoke across the opening to the grip, carrying a black button cluster
+        const z0s = pw / 2 - 0.004, z1s = hx1 + 0.004, zc = (z0s + z1s) / 2;
+        yb.rbox('alcantara', 0.026, 0.032, z1s - z0s, 0.008, -0.012, -0.004, s * zc);
+        yb.rbox('gloss', 0.008, 0.03, 0.038, 0.005, -0.028, -0.002, s * (zc - 0.004));
         for (const dz of [-0.01, 0.01]) yb.box('black', 0.006, 0.008, 0.008, -0.033, 0.006, s * (zc - 0.004 + dz));
         yb.box('black', 0.006, 0.008, 0.018, -0.033, -0.01, s * (zc - 0.004));
         yb.add('silver', new THREE.CylinderGeometry(0.007, 0.007, 0.005, 10), -0.034, 0.003, s * (zc + 0.016), 0, 0, PI / 2);
