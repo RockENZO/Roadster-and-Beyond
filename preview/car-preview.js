@@ -5,8 +5,8 @@ import { RoadsterModel } from '../src/car.js';
 import { VARIANTS, WHEELS, COM_H, SUSP } from '../src/spec.js';
 import { DEMO_TEL } from '../src/screen.js';
 
-// Preview: ?view=side|front|rear|top|threeq|rear3q|interior|frontlow|cockpit|frunk|dash&variant=rocket&doors=1&wing=1
-//          &airbrake=1&lights=1&brake=1&fans=1&noz=1&steer=0.4&frunk=1&mph=54&bg=light
+// Preview: ?view=side|front|rear|top|threeq|rear3q|interior|frontlow|cockpit|trunk|dash&variant=rocket&doors=1&wing=1
+//          &airbrake=1&lights=1&brake=1&fans=1&noz=1&steer=0.4&frunk=1 (trunk)&mph=54&bg=light
 const q = new URLSearchParams(location.search);
 const num = (k, d = 0) => (q.has(k) ? parseFloat(q.get(k)) : d);
 
@@ -59,7 +59,7 @@ const views = {
   frontlow: [[7.5, 0.9, 3.3], [0, 0.45, 0]],
   interior: [[-0.35, 0.95, 0.8], [0.7, 0.62, -0.45]],
   dash: [[-0.05, 0.86, 0.55], [0.6, 0.66, -0.2]],
-  frunk: [[3.6, 2.0, 2.4], [1.3, 0.35, 0]],
+  trunk: [[-3.2, 2.0, -2.6], [-1.2, 0.5, 0]],
   cockpit: [[0, 0, 0], [1, 0, 0]],
   under: [[1.5, -3.2, 3.2], [-0.2, 0.3, 0]],
 };
