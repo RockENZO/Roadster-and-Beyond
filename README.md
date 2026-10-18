@@ -45,6 +45,25 @@ Event mode closes with a 0-60 run on the drag strip (the event's timed run was 0
 
 **The broadcast overlay**, after the stream's: an arc gauge for downforce (kg) or G-force, a globe with the car inside showing its attitude, pitch in degrees, altitude in feet, and a top-down diagram that lights each nozzle as it fires. Free driving adds speed, a 0-60 timer and a score for flips, rolls, air time, clearing the lineup and the wall hang.
 
+## Model vs. reference
+
+Each image puts the in-game render (left) beside a frame from the closer-look video or an official photo (right). Reference frames are shown for comparison only and belong to their owners.
+
+| | |
+|---|---|
+| ![Side, wing up](docs/compare/01-side-wing-up.jpg) | ![Front three-quarter, lamps up](docs/compare/02-front-three-quarter-lamps-up.jpg) |
+| Side profile, wing raised | Front three-quarter, pop-up lamps |
+| ![Rear, wing and brake lights](docs/compare/03-rear-wing-brake-lights.jpg) | ![Diffuser, nozzles and fans](docs/compare/04-diffuser-nozzles-fans.jpg) |
+| Tail bar under braking, wing up | Diffuser with cold-gas nozzles and suction fans |
+| ![Front lid and gas sphere](docs/compare/05-frunk-gas-sphere.jpg) | ![Doors and wing up](docs/compare/09-doors-and-wing-up.jpg) |
+| Front lid open on the gas tank (`K`) | Butterfly doors and wing up |
+| ![Yoke and touchscreen](docs/compare/06-yoke-and-touchscreen.jpg) | ![Touchscreen UI](docs/compare/07-touchscreen-ui.jpg) |
+| Yoke and floating touchscreen | Live track-mode touchscreen |
+
+![First-person cockpit](docs/compare/08-first-person-cockpit-in-game.jpg)
+
+*First-person camera (`C`): live speed and telemetry on the touchscreen.*
+
 ## Controls
 
 | Action | Keyboard | Gamepad |
