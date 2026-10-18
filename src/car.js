@@ -965,7 +965,7 @@ export class RoadsterModel {
       b.box('ambient', 0.22, 0.006, 0.006, 0.32, -0.138, 0.36, 0, 0, 0.3);
     }
 
-    // roll hoop behind the seats, roof side rails and the overhead spine
+    // roll hoop behind the seats and the roof side rails; the glass roof between them is clear
     const hx = -0.78;
     const hs = sectionAt(hx);
     for (const s of [1, -1]) {
@@ -981,12 +981,6 @@ export class RoadsterModel {
       }
     }
     b.bar('trim', V3(hx, hs[R][0] - 0.04, -(hs[R][1] - 0.05)), V3(hx, hs[R][0] - 0.04, hs[R][1] - 0.05), 0.075, 0.06);
-    {
-      const pts = [0.62, 0.2, hx].map((x) => V3(x, sectionAt(x)[T][0] - 0.035, 0));
-      b.bar('alcantara', pts[0], pts[1], 0.03, 0.15, 0);
-      b.bar('alcantara', pts[1], pts[2], 0.03, 0.15, 0);
-      b.box('ambient', 0.05, 0.004, 0.012, 0.4, sectionAt(0.4)[T][0] - 0.052, 0, 0, 0, 0.3);
-    }
     b.build(m, this.mat);
 
     // yoke, after the closer-look video: a dark grey body shaped like a sideways figure 8 (two loops
