@@ -23,6 +23,10 @@ Each image puts the in-game render (left) beside a frame from the closer-look vi
 | ![Yoke and touchscreen](docs/compare/06-yoke-and-touchscreen.jpg) | ![Touchscreen UI](docs/compare/07-touchscreen-ui.jpg) |
 | Yoke and floating touchscreen | Live track-mode touchscreen |
 
+![Headlamp panel dropped](docs/compare/10-headlamp-panel-dropped.jpg)
+
+*Headlamps on (`L`): the triangular corner panel sinks at its rear edge and uncovers the lamp bar.*
+
 ![First-person cockpit](docs/compare/08-first-person-cockpit-in-game.jpg)
 
 *First-person camera (`C`): live speed and telemetry on the touchscreen.*
