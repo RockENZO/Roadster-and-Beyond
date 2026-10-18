@@ -20,7 +20,7 @@ Pushing to `main` deploys to GitHub Pages through `.github/workflows/deploy.yml`
 
 ## What is in it
 
-**The car**, modelled from Tesla's official photos and the close-look video: a low faceted wedge in satin white with a black lower body and silver sill blades, a bronze glass canopy from the windshield to the tail, a raked black nose under a full-width light line, pop-up lamps that lift out of the hood seams, a hood vent, a front lid that opens on the carbon-wrapped gas sphere, amber markers over the outlets behind the front wheels, butterfly doors, a deck wing that rises up and back on swan-neck struts and tilts into an airbrake, a full-width red tail bar with lit lettering over a lit RDSTR plate, four gold-lined cold-gas nozzles over four suction-fan bays in a carbon diffuser, and six-spoke wheels on aero discs. Inside: white buckets with lit badges, belts, a dark alcantara dash with carbon trim and a red ambient strip, the squared yoke (it turns with the steering), a console tray, the roll hoop, and the floating touchscreen, which in the cockpit camera shows live telemetry in the car's Track Mode layout (speed, gear, battery, brake/accel/regen, temperatures, g-meter, lap trace, tyres, 0-60 session and thruster gas).
+**The car**, modelled from Tesla's official photos and the close-look video: a low faceted wedge in satin white with a black lower body and silver sill blades, a bronze glass canopy from the windshield to the tail, a raked black nose under a full-width light line, pop-up lamps that lift out of the hood seams, a hood vent, a rear trunk lid behind the cabin that swings up over the carbon-wrapped gas sphere, amber markers over the outlets behind the front wheels, butterfly doors, a deck wing that rises up and back on swan-neck struts and tilts into an airbrake, a full-width red tail bar with lit lettering over a lit RDSTR plate, four gold-lined cold-gas nozzles over four suction-fan bays in a carbon diffuser, and six-spoke wheels on aero discs. Inside: white buckets with lit badges, belts, a dark alcantara dash with carbon trim and a red ambient strip, the squared yoke (it turns with the steering), a console tray, the roll hoop, and the floating touchscreen, which in the cockpit camera shows live telemetry in the car's Track Mode layout (speed, gear, battery, brake/accel/regen, temperatures, g-meter, lap trace, tyres, 0-60 session and thruster gas).
 
 **Three versions**, as announced:
 
@@ -55,8 +55,8 @@ Each image puts the in-game render (left) beside a frame from the closer-look vi
 | Side profile, wing raised | Front three-quarter, pop-up lamps |
 | ![Rear, wing and brake lights](docs/compare/03-rear-wing-brake-lights.jpg) | ![Diffuser, nozzles and fans](docs/compare/04-diffuser-nozzles-fans.jpg) |
 | Tail bar under braking, wing up | Diffuser with cold-gas nozzles and suction fans |
-| ![Front lid and gas sphere](docs/compare/05-frunk-gas-sphere.jpg) | ![Doors and wing up](docs/compare/09-doors-and-wing-up.jpg) |
-| Front lid open on the gas tank (`K`) | Butterfly doors and wing up |
+| ![Trunk and gas sphere](docs/compare/05-trunk-gas-sphere.jpg) | ![Doors and wing up](docs/compare/09-doors-and-wing-up.jpg) |
+| Rear trunk lid open on the gas tank behind the seats (`K`) | Butterfly doors and wing up |
 | ![Yoke and touchscreen](docs/compare/06-yoke-and-touchscreen.jpg) | ![Touchscreen UI](docs/compare/07-touchscreen-ui.jpg) |
 | Yoke and floating touchscreen | Live track-mode touchscreen |
 
@@ -81,7 +81,7 @@ Each image puts the in-game render (left) beside a frame from the closer-look vi
 | Camera (chase, far, cockpit, broadcast) | `C` | `Y` |
 | Look around | | Right stick |
 | Headlights / doors | `L` / `O` | D-pad up / down |
-| Front lid (gas sphere) | `K` | |
+| Trunk (gas sphere) | `K` | |
 | Jump to a stunt | `1`-`5` | D-pad left / right |
 | Respawn | `R` | View |
 | Menu / pause / leave Event mode | `Esc` | Menu |

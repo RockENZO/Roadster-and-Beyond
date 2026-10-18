@@ -57,6 +57,9 @@ const REAR_GLASS_END = -1.75;
 const DOOR_FRONT = 0.84;
 const DOOR_REAR = -0.28;
 const LID_FRONT = 1.98; // front lid: the hood panel between the two lamp seams
+// Rear trunk lid over the gas sphere: the deck and rear glass behind the cabin, hinged at its rear
+// edge just ahead of the wing; the front edge swings up tall.
+const TRUNK_FRONT = SIDE_GLASS_REAR, TRUNK_HINGE = -1.64;
 const ARCH_R = 0.4; // horizontal radius
 const ARCH_RY = 0.36; // vertical radius (the fender sits tight over the tyre)
 const ARCH_CY = SUSP.radius - COM_H; // wheel centre height at rest
@@ -261,6 +264,16 @@ function carbonTexture(light = false) {
   return t;
 }
 
+// Rounded rectangle path centred on the origin (for the yoke and the binnacle).
+function roundRect(sh, w, h, r) {
+  const x = -w / 2, y = -h / 2;
+  sh.moveTo(x + r, y); sh.lineTo(x + w - r, y); sh.quadraticCurveTo(x + w, y, x + w, y + r);
+  sh.lineTo(x + w, y + h - r); sh.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  sh.lineTo(x + r, y + h); sh.quadraticCurveTo(x, y + h, x, y + h - r);
+  sh.lineTo(x, y + r); sh.quadraticCurveTo(x, y, x + r, y);
+  return sh;
+}
+
 // Box stretched between two points (for thin trim lines and struts).
 function barBetween(a, b, w, h, mat) {
   const d = new THREE.Vector3().subVectors(b, a);
@@ -291,7 +304,7 @@ export class RoadsterModel {
     this._q = new THREE.Quaternion();
     this.makeMaterials();
     this.buildBody();
-    this.buildFrunk();
+    this.buildTrunk();
     this.buildDetails();
     this.buildTail();
     if (opts.interior !== false) this.buildInterior(variant);
@@ -327,6 +340,7 @@ export class RoadsterModel {
       white: new THREE.MeshStandardMaterial({ color: 0xe9e9e6, roughness: 0.78 }),
       seatGray: new THREE.MeshStandardMaterial({ color: 0xb4b6b8, roughness: 0.9 }),
       alcantara: new THREE.MeshStandardMaterial({ color: 0x2b2d30, roughness: 1 }),
+      padGray: new THREE.MeshStandardMaterial({ color: 0x46494d, roughness: 0.8 }),
       trim: new THREE.MeshStandardMaterial({ color: 0x3c3f44, roughness: 0.75, metalness: 0.15 }),
       carbon: new THREE.MeshStandardMaterial({ color: 0xffffff, map: carbon, metalness: 0.35, roughness: 0.38 }),
       metal: new THREE.MeshStandardMaterial({ color: 0x3b3f45, metalness: 0.9, roughness: 0.3 }),
@@ -358,6 +372,7 @@ export class RoadsterModel {
     const xs = KEYS.map((k) => k[0]);
     const axles = [WHEELS[0].x, WHEELS[2].x];
     for (const wx of axles) for (let i = 1; i < 10; i++) xs.push(wx + ARCH_R * Math.cos((i / 10) * PI));
+    xs.push(TRUNK_HINGE);
     const archY = (x) => {
       for (const wx of axles) {
         const dx = (x - wx) / ARCH_R;
@@ -396,6 +411,7 @@ export class RoadsterModel {
     const mesh = new Mesher();
     const doorMesh = [new Mesher(), new Mesher()];
     const lidMesh = new Mesher();
+    const trunkMesh = new Mesher();
     const V = (st, k, side) => [st.x + (st.skew ? st.skew[k] : 0), st.pts[k][0], st.pts[k][1] * side];
     const ST = this.stations;
     for (let si = 0; si < ST.length - 1; si++) {
@@ -410,10 +426,11 @@ export class RoadsterModel {
         else if (k === 7) key = xm < WIN_FRONT && xm > REAR_GLASS_END ? 'glass' : 'paint';
         const door = k >= 3 && k <= 6 && xm < DOOR_FRONT && xm > DOOR_REAR;
         const lid = k === 7 && xm < LID_FRONT && xm > WIN_FRONT;
+        const trunk = (k === 6 || k === 7) && xm < TRUNK_FRONT && xm > TRUNK_HINGE;
         for (let side = 1; side >= -1; side -= 2) {
           const a = V(s0, k, side), b = V(s0, k + 1, side);
           const c = V(s1, k + 1, side), d = V(s1, k, side);
-          const target = door ? doorMesh[side > 0 ? 0 : 1] : lid ? lidMesh : mesh;
+          const target = door ? doorMesh[side > 0 ? 0 : 1] : lid ? lidMesh : trunk ? trunkMesh : mesh;
           const inner = door ? 'doorIn' : 'liner';
           if (side > 0) {
             target.tri(key, a, b, c);
@@ -468,6 +485,21 @@ export class RoadsterModel {
       m.add(pivot);
       this.lid = { pivot, inner };
     }
+    // Rear trunk lid (deck and rear glass): hinged at its rear edge, the front edge lifts.
+    {
+      const hy = sectionAt(TRUNK_HINGE)[T][0];
+      const pivot = new THREE.Group();
+      pivot.position.set(TRUNK_HINGE, hy, 0);
+      const inner = new THREE.Group();
+      inner.position.set(-TRUNK_HINGE, -hy, 0);
+      pivot.add(inner);
+      add(trunkMesh.geometry('paint'), this.mat.paint, inner);
+      add(trunkMesh.geometry('liner'), this.mat.liner, inner);
+      const tg = add(trunkMesh.geometry('glass'), this.mat.glass, inner);
+      if (tg) tg.renderOrder = 2;
+      m.add(pivot);
+      this.trunk = { pivot, inner };
+    }
 
     // Hinge at the front of the door just under the A-pillar; the axis is mostly transverse (the
     // door's rear edge swings up) and leans so the door also splays outward, as in the photos.
@@ -500,35 +532,37 @@ export class RoadsterModel {
     }
   }
 
-  // ---------------------------------------------------------------- front compartment
-  buildFrunk() {
+  // ---------------------------------------------------------------- rear trunk
+  // Behind the seat backs, under the rear deck lid: the carbon-wrapped gas sphere (COPV) with a
+  // grey girth band over its top, a cross tube in front of it and the valve block on its side.
+  buildTrunk() {
     const m = this.group;
     const b = new Batch();
-    // tub under the lid (inside faces only)
-    const tub = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.36, 1.16), new THREE.MeshStandardMaterial({ color: 0x1a1b1e, roughness: 0.8, side: THREE.BackSide }));
-    tub.position.set(1.58, -0.13, 0);
+    // tub (inside faces only), between the cabin bulkhead and the tail
+    const tub = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.62, 1.24), new THREE.MeshStandardMaterial({ color: 0x1a1b1e, roughness: 0.8, side: THREE.BackSide }));
+    tub.position.set(-1.25, -0.01, 0);
     tub.userData.shadow = false;
     m.add(tub);
-    // carbon-wrapped gas sphere (COPV)
-    const cx = 1.5, cy = -0.03, r = 0.2;
-    const sphere = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 16), this.mat.copv);
+    const cx = -1.22, cy = 0.1, r = 0.27;
+    const sphere = new THREE.Mesh(new THREE.SphereGeometry(r, 28, 18), this.mat.copv);
     sphere.position.set(cx, cy, 0);
     m.add(sphere);
-    // girth band and the tubular cradle around it
-    b.add('trim', new THREE.TorusGeometry(r + 0.004, 0.012, 6, 32), cx, cy, 0, 0, PI / 2, 0);
-    b.add('metal', new THREE.TorusGeometry(r + 0.03, 0.011, 6, 24, PI), cx, cy, 0, 0, 0, 0);
-    b.bar('metal', new THREE.Vector3(cx - r - 0.03, cy, 0.0), new THREE.Vector3(cx - r - 0.03, cy - 0.2, 0), 0.022, 0.022);
-    b.bar('metal', new THREE.Vector3(cx + r + 0.03, cy, 0.0), new THREE.Vector3(cx + r + 0.03, cy - 0.2, 0), 0.022, 0.022);
-    for (const s of [1, -1]) b.bar('metal', new THREE.Vector3(cx - 0.05, cy + 0.02, s * 0.22), new THREE.Vector3(cx - 0.3, cy + 0.1, s * 0.45), 0.02, 0.02);
-    // valve / regulator assembly on the front face
-    const vx = cx + r * 0.8, vz = 0.09;
-    b.rbox('gloss', 0.035, 0.22, 0.13, 0.008, vx + 0.07, cy - 0.01, vz, 0, -0.5, -0.35, 'YXZ');
-    b.add('trim', new THREE.CylinderGeometry(0.03, 0.03, 0.2, 14), vx + 0.04, cy - 0.01, vz, 0, -0.5, -0.35, 'YXZ');
-    b.add('silver', new THREE.CylinderGeometry(0.032, 0.032, 0.02, 14), vx + 0.06, cy + 0.08, vz - 0.02, 0, -0.5, -0.35, 'YXZ');
-    b.add('metal', new THREE.CylinderGeometry(0.012, 0.012, 0.18, 8), vx + 0.02, cy - 0.11, vz - 0.04, 0, 0, 1.2);
-    b.box('silver', 0.03, 0.04, 0.05, vx + 0.07, cy - 0.12, vz + 0.04);
-    // cross tube from the bulkhead past the sphere
-    b.bar('metal', new THREE.Vector3(1.22, 0.04, -0.4), new THREE.Vector3(1.78, 0.02, 0.32), 0.03, 0.03);
+    // girth band across the top with a vent grille, and the cradle feet
+    b.add('trim', new THREE.TorusGeometry(r + 0.006, 0.02, 6, 36), cx, cy, 0, 0, PI / 2, 0);
+    for (let i = -2; i <= 2; i++) b.box('black', 0.012, 0.008, 0.03, cx + i * 0.02, cy + r + 0.022, 0.05);
+    for (const s of [1, -1]) {
+      b.bar('metal', new THREE.Vector3(cx, cy - 0.12, s * (r - 0.02)), new THREE.Vector3(cx + s * 0.0, -0.3, s * 0.3), 0.03, 0.03);
+    }
+    // cross tube in front of the sphere, from the driver's side across
+    b.bar('metal', new THREE.Vector3(cx + r + 0.04, cy + 0.04, -0.6), new THREE.Vector3(cx + r + 0.04, cy + 0.04, 0.6), 0.035, 0.035);
+    b.bar('metal', new THREE.Vector3(cx + r + 0.04, cy + 0.04, 0.42), new THREE.Vector3(cx + 0.05, cy + r + 0.05, 0.3), 0.03, 0.03);
+    // valve / regulator block in a bracket on the driver's side of the sphere
+    const vx = cx + 0.12, vy = cy - 0.02, vz = -(r - 0.02);
+    b.rbox('gloss', 0.18, 0.06, 0.035, 0.008, vx, vy, vz - 0.01, 0, 0.6, -0.5, 'YXZ');
+    b.add('trim', new THREE.CylinderGeometry(0.032, 0.032, 0.2, 14), vx, vy, vz - 0.05, 0, 0.6, PI / 2 - 0.5, 'YXZ');
+    b.add('silver', new THREE.CylinderGeometry(0.035, 0.035, 0.02, 14), vx + 0.08, vy + 0.05, vz - 0.08, 0, 0.6, PI / 2 - 0.5, 'YXZ');
+    b.box('silver', 0.04, 0.035, 0.04, vx - 0.08, vy - 0.05, vz - 0.03);
+    b.add('metal', new THREE.CylinderGeometry(0.012, 0.012, 0.2, 8), vx - 0.06, vy - 0.1, vz + 0.05, PI / 2, 0, 0);
     b.build(m, this.mat);
   }
 
@@ -659,8 +693,10 @@ export class RoadsterModel {
     for (let i = 0; i < 2; i++) {
       const side = i === 0 ? 1 : -1;
       const door = this.doorObjs[i].inner;
-      const onDoor = (xm) => (xm < DOOR_FRONT && xm > DOOR_REAR ? door : m);
-      const xsR = [WIN_FRONT, DOOR_FRONT, 0.2, DOOR_REAR, -0.65, -1.0, -1.36, REAR_GLASS_END];
+      const onDoor = (xm) => (xm < DOOR_FRONT && xm > DOOR_REAR ? door : xm < TRUNK_FRONT && xm > TRUNK_HINGE ? this.trunk.inner : m);
+      const xsR = [WIN_FRONT, DOOR_FRONT, 0.2, DOOR_REAR, -0.65, -1.0, -1.36, TRUNK_HINGE, REAR_GLASS_END];
+      // trunk lid shut line along the G crease
+      line([TRUNK_FRONT, -1.36, TRUNK_HINGE].map((x) => pt(stAt(x), G, side, 1.004)), 0.009);
       line(xsR.map((x) => pt(stAt(x), R, side)), 0.014, onDoor);
       line([WIN_FRONT, DOOR_FRONT, 0.2, DOOR_REAR, -0.65, SIDE_GLASS_REAR].map((x) => pt(stAt(x), G, side)), 0.012, onDoor);
       // door shut lines
@@ -806,14 +842,21 @@ export class RoadsterModel {
     b.box('trim', 0.012, 0.012, 1.7, 0.555, 0.172, 0);
     // red ambient strip on the passenger side of the dash fascia
     b.box('ambient', 0.012, 0.012, 0.7, 0.548, 0.1, 0.45);
-    // vent behind the yoke: dark slot with a light bezel
-    b.box('gloss', 0.03, 0.05, 0.38, 0.568, 0.155, z0);
-    for (const dy of [-0.03, 0.03]) b.rbox('silver', 0.02, 0.01, 0.42, 0.004, 0.565, 0.155 + dy, z0);
-    for (const dz of [-0.205, 0.205]) b.rbox('silver', 0.02, 0.07, 0.012, 0.004, 0.565, 0.155, z0 + dz);
-    for (let i = 0; i < 4; i++) b.box('metal', 0.02, 0.004, 0.37, 0.562, 0.137 + i * 0.012, z0);
+    // dark oval binnacle / vent housing behind the yoke, silver bezel set into the dash
+    {
+      const ring = roundRect(new THREE.Shape(), 0.44, 0.13, 0.065);
+      ring.holes.push(roundRect(new THREE.Path(), 0.41, 0.1, 0.05));
+      const bez = new THREE.ExtrudeGeometry(ring, { depth: 0.03, bevelEnabled: false, curveSegments: 8 });
+      bez.rotateY(PI / 2);
+      b.add('silver', bez, 0.55, 0.14, z0, 0, 0, -0.15);
+      const hole = new THREE.ExtrudeGeometry(roundRect(new THREE.Shape(), 0.41, 0.1, 0.05), { depth: 0.08, bevelEnabled: false, curveSegments: 8 });
+      hole.rotateY(PI / 2);
+      b.add('gloss', hole, 0.565, 0.14, z0, 0, 0, -0.15);
+      for (let i = 0; i < 3; i++) b.box('trim', 0.008, 0.006, 0.38, 0.566, 0.116 + i * 0.024, z0, 0, 0, -0.15);
+    }
     // yoke column
-    b.add('alcantara', new THREE.CylinderGeometry(0.04, 0.05, 0.26, 12), 0.46, 0.095, z0, 0, 0, PI / 2 - 0.25);
-    b.add('silver', new THREE.CylinderGeometry(0.043, 0.043, 0.02, 12), 0.36, 0.12, z0, 0, 0, PI / 2 - 0.25);
+    b.add('gloss', new THREE.CylinderGeometry(0.035, 0.042, 0.2, 14), 0.45, 0.1, z0, 0, 0, PI / 2 - 0.25);
+    b.add('silver', new THREE.CylinderGeometry(0.04, 0.04, 0.015, 14), 0.37, 0.12, z0, 0, 0, PI / 2 - 0.25);
     // pedals
     b.rbox('silver', 0.012, 0.11, 0.09, 0.004, 0.9, -0.2, z0 - 0.04, 0, 0, 0.5);
     b.rbox('silver', 0.012, 0.13, 0.05, 0.004, 0.92, -0.2, z0 + 0.1, 0, 0, 0.5);
@@ -900,36 +943,46 @@ export class RoadsterModel {
     }
     b.build(m, this.mat);
 
-    // yoke: squared white rim, dark centre pad; turns with the steering
+    // yoke: a squared stadium loop. Thick white outer shell with soft corners, flatter top and
+    // bottom, tall grips; the deep inner face of the rim is dark grey. A large grey rounded-square
+    // pad fills most of the opening on short spokes carrying black button clusters.
     const yokeMount = new THREE.Group();
     yokeMount.position.set(0.32, 0.125, z0);
-    yokeMount.rotation.z = -0.25; // top leans forward, column runs forward and down
+    yokeMount.rotation.z = -0.2; // top leans forward, column runs forward and down
     const yoke = new THREE.Group();
     yokeMount.add(yoke);
     {
       const yb = new Batch();
-      const rr = (s, w, h, r) => {
-        const x = -w / 2, y = -h / 2;
-        s.moveTo(x + r, y); s.lineTo(x + w - r, y); s.quadraticCurveTo(x + w, y, x + w, y + r);
-        s.lineTo(x + w, y + h - r); s.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-        s.lineTo(x + r, y + h); s.quadraticCurveTo(x, y + h, x, y + h - r);
-        s.lineTo(x, y + r); s.quadraticCurveTo(x, y, x + r, y);
-        return s;
+      // about 1.35:1, slim top and bottom bars, tall grips only slightly thicker, deep front to back
+      const W = 0.32, H = 0.237, depth = 0.085, gw = 0.036, bh = 0.024;
+      const iw = W - 2 * gw, ih = H - 2 * bh; // opening
+      const ext = (shape, d, bevel) => {
+        const g = new THREE.ExtrudeGeometry(shape, { depth: d, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 12 });
+        g.translate(0, 0, -d / 2);
+        g.rotateY(PI / 2);
+        return g;
       };
-      const shape = rr(new THREE.Shape(), 0.3, 0.215, 0.065);
-      const hole = rr(new THREE.Path(), 0.232, 0.15, 0.04);
-      shape.holes.push(hole);
-      const rim = new THREE.ExtrudeGeometry(shape, { depth: 0.026, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.006, bevelSegments: 2, curveSegments: 6 });
-      rim.translate(0, 0.0, -0.015);
-      rim.rotateY(PI / 2);
-      yb.add('white', rim);
-      // dark centre pad on two spokes; scroll wheels and buttons on the spokes
-      yb.rbox('alcantara', 0.05, 0.118, 0.13, 0.03, 0.012, -0.004, 0);
-      yb.rbox('trim', 0.01, 0.09, 0.1, 0.008, -0.014, -0.002, 0);
+      // white outer shell wrapping the outside edge
+      const shell = roundRect(new THREE.Shape(), W - 0.008, H - 0.008, 0.075);
+      shell.holes.push(roundRect(new THREE.Path(), iw + 0.004, ih + 0.004, 0.045));
+      yb.add('white', ext(shell, depth - 0.008, 0.004));
+      // dark grey inner lining: a wide band when seen at an angle
+      const lining = roundRect(new THREE.Shape(), iw + 0.006, ih + 0.006, 0.046);
+      lining.holes.push(roundRect(new THREE.Path(), iw - 0.004, ih - 0.004, 0.042));
+      yb.add('trim', ext(lining, depth - 0.012, 0));
+      // centre pad: small dark-grey pillowed square, ~40% of the opening's width and 60% of its height,
+      // slightly proud of the rim toward the driver
+      const pw = iw * 0.5, ph = ih * 0.8;
+      yb.rbox('padGray', 0.045, ph, pw, 0.02, -0.03, 0, 0);
+      yb.rbox('padGray', 0.02, ph - 0.024, pw - 0.024, 0.01, -0.05, 0, 0);
       for (const s of [1, -1]) {
-        yb.box('alcantara', 0.034, 0.05, 0.06, 0.012, -0.004, s * 0.092);
-        yb.box('silver', 0.012, 0.022, 0.012, -0.008, 0.008, s * 0.088);
-        yb.box('metal', 0.012, 0.012, 0.012, -0.008, -0.016, s * 0.084);
+        // horizontal spoke bridging the gap to the grip, carrying a black button cluster
+        const z0s = pw / 2 - 0.004, z1s = iw / 2 + 0.004, zc = (z0s + z1s) / 2;
+        yb.rbox('alcantara', 0.028, 0.034, z1s - z0s, 0.008, -0.012, -0.004, s * zc);
+        yb.rbox('gloss', 0.008, 0.03, 0.04, 0.005, -0.028, -0.002, s * (zc - 0.004));
+        for (const dz of [-0.01, 0.01]) yb.box('black', 0.006, 0.008, 0.008, -0.033, 0.006, s * (zc - 0.004 + dz));
+        yb.box('black', 0.006, 0.008, 0.018, -0.033, -0.01, s * (zc - 0.004));
+        yb.add('silver', new THREE.CylinderGeometry(0.007, 0.007, 0.005, 10), -0.034, 0.003, s * (zc + 0.016), 0, 0, PI / 2);
       }
       yb.build(yoke, this.mat);
     }
@@ -1110,7 +1163,7 @@ export class RoadsterModel {
   }
 
   // st: { wheels[{steer, spin, y}], doors, wing, airbrake, lights, brake, fans, nozzles, speed,
-  //       frunk (0..1, optional), steer (yoke, optional), cockpit (bool: first-person view live),
+  //       frunk (0..1, optional: opens the rear trunk lid over the gas sphere), steer (yoke, optional), cockpit (bool: first-person view live),
   //       telemetry (optional, see screen.js) }
   update(dt, st) {
     const s = this.s;
@@ -1136,7 +1189,7 @@ export class RoadsterModel {
     for (const d of this.doorObjs) d.pivot.quaternion.setFromAxisAngle(d.axis, doorAng * d.sign);
     // front lid
     s.frunk = ease(s.frunk, clamp01(st.frunk || 0), 3, dt);
-    this.lid.pivot.rotation.z = s.frunk * 1.15;
+    this.trunk.pivot.rotation.z = s.frunk * 1.2; // st.frunk opens the rear trunk lid
     // wing and airbrake
     s.wing = ease(s.wing, clamp01(st.wing || 0), 4, dt);
     s.airbrake = ease(s.airbrake, clamp01(st.airbrake || 0), 6, dt);

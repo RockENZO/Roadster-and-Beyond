@@ -165,7 +165,7 @@ function renderHints() {
     : `<div>${k('W')} ${k('S')} <b>Throttle / brake</b> (hold ${k('S')} at a stop to reverse) &nbsp; ${k('A')} ${k('D')} <b>Steer</b></div>
        ${gas}
        <div>${k('T')} <b>Track Mode</b> &nbsp; ${k('F')} <b>Fans off</b> (drop from the wall) &nbsp; ${k('B')} <b>Handbrake</b></div>
-       <div>${k('C')} Camera &nbsp; ${k('L')} Lights &nbsp; ${k('O')} Doors &nbsp; ${k('K')} Front lid &nbsp; ${k('1')}-${k('5')} Stunts &nbsp; ${k('R')} Respawn &nbsp; ${k('H')} Hide help &nbsp; ${k('M')} Mute &nbsp; ${k('Esc')} Menu</div>`;
+       <div>${k('C')} Camera &nbsp; ${k('L')} Lights &nbsp; ${k('O')} Doors &nbsp; ${k('K')} Trunk &nbsp; ${k('1')}-${k('5')} Stunts &nbsp; ${k('R')} Respawn &nbsp; ${k('H')} Hide help &nbsp; ${k('M')} Mute &nbsp; ${k('Esc')} Menu</div>`;
 }
 input.onDevice = (d) => { renderHints(); menuHint(); toast(d === 'pad' ? `Controller active${input.padName ? ': ' + input.padName.replace(/\(.*\)/, '').trim() : ''}` : 'Keyboard active'); };
 
@@ -605,7 +605,7 @@ function update(dt) {
     if (P.camera) { camMode = (camMode + 1) % CAMS.length; toast(CAMS[camMode]); }
     if (P.lights) { lights = !lights; toast(lights ? 'Headlights up' : 'Headlights hidden'); }
     if (P.doors) { mst.doorsT = mst.doorsT ? 0 : 1; if (Math.abs(vehicle.vFwd) > 3) toast('Stop to open the doors'); }
-    if (P.frunk) { mst.frunkT = mst.frunkT ? 0 : 1; if (Math.abs(vehicle.vFwd) > 3) toast('Stop to open the front lid'); }
+    if (P.frunk) { mst.frunkT = mst.frunkT ? 0 : 1; if (Math.abs(vehicle.vFwd) > 3) toast('Stop to open the trunk'); }
     if (P.hints) $('hints').classList.toggle('off');
     if (P.reset) { vehicle.respawn(stuntFor(vehicle.pos)); centerMsg(vehicle.spawn.label, '', 1); }
     let jump = null;
