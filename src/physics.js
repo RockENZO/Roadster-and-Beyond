@@ -475,10 +475,12 @@ export class Vehicle {
       let L = 0;
       // The hop fires the lift jets along the car's own up axis; the flight computer scales them by how
       // upright the car is, so a roll during the hop doesn't shove the car sideways off its line.
-      if (this.hopT > 0) L = Lmax * 0.92 * clamp(upW.y, 0, 1);
-      else if (inp.lift && airborne && upW.y > 0.15) {
+      if (this.hopT > 0) L = Math.min(Lmax, 2.15 * m * G) * clamp(upW.y, 0, 1);
+      else if (inp.lift && airborne && upW.y > 0.5) {
+        // Hover lift only once the car is nearly upright (faded in from 30 to 60 deg of tilt), so jets
+        // fired mid-roll don't shove the car sideways.
         const vyT = 5 * (inp.throttle || 0) - 6 * (inp.brake || 0);
-        L = clamp(m * (G + 3 * (vyT - this.vel.y)) / Math.max(upW.y, 0.35), 0, Lmax);
+        L = clamp(m * (G + 3 * (vyT - this.vel.y)) / upW.y, 0, Lmax) * clamp((upW.y - 0.5) / 0.37, 0, 1);
         this.hovering = true;
       }
       // Attitude: rate commands from the sticks. With flight assist on, the car levels itself when the
@@ -497,19 +499,29 @@ export class Vehicle {
           // Level the car. While hovering, lean against horizontal drift like a drone (up to ~25 deg).
           const tg = _f.set(0, 1, 0);
           if (inp.lift && this.hopT <= 0) {
-            tg.set(-this.vel.x * 0.12, 1, -this.vel.z * 0.12);
+            // ...but not while dropping fast: then every jet points straight down to brake the fall.
+            const lk = 0.12 * clamp(1 - (Math.abs(this.vel.y) - 1) / 4, 0, 1) * clamp((this.pos.y - 1.5) / 3, 0, 1); // and flat for touchdown
+            tg.set(-this.vel.x * lk, 1, -this.vel.z * lk);
             const hl = Math.hypot(tg.x, tg.z);
             if (hl > 0.47) { tg.x *= 0.47 / hl; tg.z *= 0.47 / hl; }
             tg.normalize();
           }
           tg.applyQuaternion(_qi);
-          let ex = tg.z, ez = -tg.x; // (0,1,0) x tg = (tg.z, 0, -tg.x)
-          const s = Math.hypot(ex, ez);
-          const ang = Math.atan2(s, tg.y);
-          if (s < 1e-4 && tg.y < 0) { ex = 1; ez = 0; } else if (s > 1e-6) { ex /= s; ez /= s; }
-          const r = Math.min(ang * 3.2, 4.2);
-          cx = ex * r; cz = ez * r;
-          cy = 0;
+          // Split the error into roll (about the long axis) and pitch, so an upside-down car rights
+          // itself with a barrel roll rather than a flip. Each axis follows a braking curve: the rate
+          // falls off as the error closes so the car stops level instead of rolling past it.
+          const prof = (e, a, rmax) => Math.sign(e) * Math.min(rmax, 4 * Math.abs(e), Math.sqrt(2 * a * Math.abs(e)));
+          if (tg.y < 0 && Math.abs(w.z) > 2 && Math.abs(w.z) > 2 * Math.abs(w.x)) {
+            // Upside down and already flipping fast: finish the flip about the pitch axis rather than rolling out of it.
+            cz = prof(Math.atan2(-tg.x, tg.y), 5, 4.2); cx = prof(Math.atan2(tg.z, Math.hypot(tg.x, tg.y)), 7, 3); cy = 0;
+          } else {
+            const er = Math.atan2(tg.z, tg.y), ep = Math.atan2(-tg.x, Math.hypot(tg.y, tg.z));
+            // Pitch is about the horizontal axis across the car (body x cross world up), so the nose is
+            // pulled level even while the car is on its side or upside down mid-roll. During a big roll
+            // the pitch is only held, so the jets spend their torque on the roll first.
+            const pr = prof(ep, 5, 3) * clamp(1.6 - Math.abs(er), 0, 1), pn = Math.hypot(tg.y, tg.z) || 1;
+            cx = prof(er, 9, 6); cy = -tg.z / pn * pr; cz = tg.y / pn * pr;
+          }
         } // else: hold the current attitude (zero rates) while lift is firing
 
         // Heading hold (flight assist): keep the nose on the heading it left the ground with, so a roll
@@ -520,7 +532,7 @@ export class Vehicle {
           let e = this.hdgRef - hd;
           e = Math.atan2(Math.sin(e), Math.cos(e));
           const wy = clamp(3 * e, -1.5, 1.5);
-          cy += upW.y * wy;
+          cx += upW.x * wy; cy += upW.y * wy; cz += upW.z * wy; // yaw about world up
         } else this.hdgRef = null;
         const K = 9;
         const tx = I.x * K * (cx - w.x), ty = I.y * K * (cy - w.y), tz = I.z * K * (cz - w.z);
@@ -529,14 +541,24 @@ export class Vehicle {
         // newton of it also shoves the car along its up axis. Pitch sets the front and rear pair totals;
         // roll is a split within each pair, shared front:rear as xr:xf so it adds no pitch. If a pair
         // can't make its split, both totals rise by the torque-free mix (front xr : rear xf).
+        // Attitude comes first: if the four jets can't give the full lift and the torque together,
+        // the lift is cut back until the torque fits, so the car can always stop a roll.
         const xf = 0.8, xr = 1.92, zz = 0.72, span = xf + xr;
-        let Ff = (xr * L + tz) / span, Fr = (xf * L - tz) / span;
-        let lam = Math.max(0, -Ff / xr, -Fr / xf);
-        Ff += lam * xr; Fr += lam * xf;
         const A = -tx / (2 * zz), af = A * xr / span, ar = A * xf / span;
-        lam = Math.max(0, (2 * Math.abs(af) - Ff) / xr, (2 * Math.abs(ar) - Fr) / xf);
-        Ff += lam * xr; Fr += lam * xf;
-        const F = [Ff / 2 + af, Ff / 2 - af, Fr / 2 + ar, Fr / 2 - ar];
+        const alloc = (Lc) => {
+          let Ff = (xr * Lc + tz) / span, Fr = (xf * Lc - tz) / span;
+          let lam = Math.max(0, -Ff / xr, -Fr / xf);
+          Ff += lam * xr; Fr += lam * xf;
+          lam = Math.max(0, (2 * Math.abs(af) - Ff) / xr, (2 * Math.abs(ar) - Fr) / xf);
+          Ff += lam * xr; Fr += lam * xf;
+          return [Ff / 2 + af, Ff / 2 - af, Fr / 2 + ar, Fr / 2 - ar];
+        };
+        let F = alloc(L);
+        if (L > 0 && Math.max(...F) > p.fLift) {
+          let lo = 0, hi = L;
+          for (let k = 0; k < 10; k++) { const mid = (lo + hi) / 2; if (Math.max(...alloc(mid)) > p.fLift) hi = mid; else lo = mid; }
+          F = alloc(lo);
+        }
         const lim = p.fLift;
         let li = 0;
         for (const n of p.nozzles) {

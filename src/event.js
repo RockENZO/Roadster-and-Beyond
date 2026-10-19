@@ -74,10 +74,9 @@ export const SEGMENTS = [
         c.throttle = v.vFwd < 8 ? 0.6 : 0.05;
         if (v.airborne) s.ph = 'fall';
       } else if (s.ph === 'fall') {
-        c.lift = true; c.brake = v.pos.y > 5 ? 0.9 : 0.3;
-        // As in the clip: leave the lip upside down and barrel-roll upright about the car's long axis
-        // (no pitch flip), then let flight assist level it and hover down.
-        if (!s.flipped) { if (v.up.y < 0.4) c.roll = v.up.y < 0 ? 1 : 0.45; else s.flipped = true; }
+        // As in the clip: leave the lip upside down, barrel-roll upright about the long axis (flight
+        // assist rolls rather than flips), then come down flat on all four lift jets, slowing near the ground.
+        c.lift = true; c.brake = v.pos.y > 9 ? 0.9 : v.pos.y > 3.5 ? 0.45 : 0.25;
         if (v.contacts >= 3) { s.ph = 'out'; s.tl = t; }
       } else {
         c.brake = Math.abs(v.vFwd) > 0.3 ? 0.5 : 0;
@@ -108,7 +107,8 @@ export const SEGMENTS = [
         if (v.pos.x >= LINEUP_X - 30) { s.ph = 'air'; s.th = t; s.m0 = s.f; P = { lift: true }; }
       } else if (s.ph === 'air') {
         const a = t - s.th;
-        c.lift = a < 0.42;
+        // Lift for the hop, then again once the roll is done to set the car down softly.
+        c.lift = a < 0.42 || (s.rolled || 0) >= 2 * Math.PI - 0.75; c.brake = a > 0.42 ? 0.3 : 0;
         // Hold the roll for nearly the whole turn so the jets only push hard while the car is near
         // upright (spin-up and the final catch); flight assist stops it level on the same heading.
         s.rolled = (s.rolled || 0) + Math.abs(v.w.x) / 20;

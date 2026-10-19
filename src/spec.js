@@ -52,16 +52,16 @@ export const VARIANTS = {
   performance: {
     key: 'performance', name: 'Performance', seats: 2, claim: '0-60 under 1.6 s',
     tag: 'Four suction fans, up to 2 g of grip. Track Mode wing and airbrake.',
-    mass: 1850, inertia: [820, 3600, 3190], nozzles: nozzles([]), gas: 0, isp: 160, fRear: 0, fLift: 0, fNose: 0,
+    mass: 1850, inertia: [820, 3600, 3190], nozzles: nozzles([]), gas: 0, isp: 160, fRear: 0, fLift: 20000, fNose: 0,
   },
   thrust: {
     key: 'thrust', name: 'Thrust', seats: 2, claim: '0-60 under 0.9 s',
     tag: 'Adds four rear cold-gas thrusters from SpaceX for launch and air.',
-    mass: 1900, inertia: [840, 3700, 3280], nozzles: nozzles(REAR), gas: 83, isp: 160, fRear: 7000, fLift: 0, fNose: 0,
+    mass: 1900, inertia: [840, 3700, 3280], nozzles: nozzles(REAR), gas: 83, isp: 160, fRear: 7000, fLift: 20000, fNose: 0,
   },
   rocket: {
     key: 'rocket', name: 'Rocket', seats: 1, claim: '0-60 under 0.6 s',
     tag: 'All ten thrusters and a flight computer. Hops, flips and hovers. One seat.',
-    mass: 2000, inertia: [880, 3900, 3450], nozzles: nozzles([...REAR, ...LIFT, ...NOSE]), gas: 250, isp: 160, fRear: 15000, fLift: 15000, fNose: 3000,
+    mass: 2000, inertia: [880, 3900, 3450], nozzles: nozzles([...REAR, ...LIFT, ...NOSE]), gas: 250, isp: 160, fRear: 15000, fLift: 20000, fNose: 3000,
   },
 };
