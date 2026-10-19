@@ -528,18 +528,26 @@ export class RoadsterModel {
     const glass = add(mesh.geometry('glass'), this.mat.glass);
     glass.renderOrder = 2;
 
-    // Front lid: hinged at the windshield base, the front edge lifts.
+    // Front lid (the hood panel between the lamp seams): in Road Mode it sits flush. With the fans
+    // working hard (High-Downforce) it pivots on its front edge and its rear edge sinks below the
+    // windshield base, opening a dark outlet slot across the hood, as in the Track Mode reveal.
     {
-      const hy = sectionAt(WIN_FRONT)[T][0];
+      const hy = sectionAt(LID_FRONT)[T][0];
       const pivot = new THREE.Group();
-      pivot.position.set(WIN_FRONT, hy, 0);
+      pivot.position.set(LID_FRONT, hy, 0);
       const inner = new THREE.Group();
-      inner.position.set(-WIN_FRONT, -hy, 0);
+      inner.position.set(-LID_FRONT, -hy, 0);
       pivot.add(inner);
       add(lidMesh.geometry('paint'), this.mat.paint, inner);
       add(lidMesh.geometry('liner'), this.mat.liner, inner);
       m.add(pivot);
       this.lid = { pivot, inner };
+      // the outlet well under the lid's rear edge: only seen through the slot when the lid drops
+      const ws = sectionAt(WIN_FRONT + 0.06);
+      const well = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, ws[R][1] * 2 - 0.04), new THREE.MeshStandardMaterial({ color: 0x050506, roughness: 0.9 }));
+      well.position.set(WIN_FRONT + 0.1, ws[T][0] - 0.16, 0);
+      well.userData.shadow = false;
+      m.add(well);
     }
     // Rear trunk lid (deck and rear glass): hinged at its rear edge, the front edge lifts.
     {
@@ -627,7 +635,6 @@ export class RoadsterModel {
     const m = this.group;
     const ST = this.stations;
     const nose = ST[0].pts;
-    const lidIn = this.lid.inner;
 
     // Thin full-width light line along the nose's top edge, wrapping a little down the corners.
     const drlZ = nose[B][1] - 0.02;
@@ -644,23 +651,6 @@ export class RoadsterModel {
     splitter.position.set(NOSE_X - 0.2, -0.29, 0);
     m.add(splitter);
 
-    // Hood vent: a dark recess with slats ahead of the windshield, on the front lid.
-    {
-      const mv = new Mesher();
-      const x0 = 1.48, x1 = 1.21, zf = 0.4, zr = 0.54;
-      const pt = (x, z) => [x, topY(x, z) + 0.004, z];
-      mv.quadHint('v', pt(x0, -zf), pt(x0, zf), pt(x1, zr), pt(x1, -zr), [0, 1, 0]);
-      lidIn.add(new THREE.Mesh(mv.geometry('v'), this.mat.nose));
-      const vb = new Batch();
-      for (let i = 1; i <= 3; i++) {
-        const x = lerp(x0, x1, i / 4);
-        const zz = lerp(zf, zr, i / 4) - 0.02;
-        vb.bar('black', new THREE.Vector3(x, topY(x, 0) + 0.012, -zz), new THREE.Vector3(x, topY(x, zz) + 0.012, zz), 0.022, 0.006);
-      }
-      // raised white lip on the front edge of the vent
-      vb.bar('paint', new THREE.Vector3(x0 + 0.015, topY(x0, 0) + 0.012, -zf - 0.02), new THREE.Vector3(x0 + 0.015, topY(x0, zf) + 0.012, zf + 0.02), 0.03, 0.035);
-      vb.build(lidIn, this.mat);
-    }
     // Lid shut lines.
     for (const side of [1, -1]) {
       const p0 = sectionAt(LID_FRONT), p1 = sectionAt(WIN_FRONT + 0.01);
@@ -1301,7 +1291,7 @@ export class RoadsterModel {
   }
 
   // st: { wheels[{steer, spin, y}], doors, wing, airbrake, lights, brake, fans, nozzles, speed,
-  //       frunk (0..1, optional: opens the rear trunk lid over the gas sphere), steer (yoke, optional), cockpit (bool: first-person view live),
+  //       frunk (0..1, optional: opens the rear trunk lid over the gas sphere), vent (0..1: hood outlet open), steer (yoke, optional), cockpit (bool: first-person view live),
   //       telemetry (optional, see screen.js) }
   update(dt, st) {
     const s = this.s;
@@ -1327,6 +1317,8 @@ export class RoadsterModel {
     for (const d of this.doorObjs) d.pivot.quaternion.setFromAxisAngle(d.axis, doorAng * d.sign);
     // front lid
     s.frunk = ease(s.frunk, clamp01(st.frunk || 0), 3, dt);
+    s.vent = ease(s.vent || 0, clamp01(st.vent || 0), 3, dt);
+    this.lid.pivot.rotation.z = 0.1 * s.vent; // st.vent: hood outlet open (fans at High-Downforce)
     this.trunk.pivot.rotation.z = s.frunk * 1.2; // st.frunk opens the rear trunk lid
     // wing and airbrake
     s.wing = ease(s.wing, clamp01(st.wing || 0), 4, dt);

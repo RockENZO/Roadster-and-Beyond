@@ -301,11 +301,15 @@ export class Vehicle {
       if (this.revT > 0.35 && inp.throttle < 0.02) drive = -inp.brake;
       else { brake = inp.brake; this.braking = vF > 0.8; }
     }
-    // Speed-sensitive steering: full lock asks for about 2.5 g of cornering at any speed above ~25 mph,
-    // so a full-stick (or keyboard) input at 130 mph can't flick the car into a spin.
-    const steerMax = Math.min(0.6 / (1 + Math.pow(Math.abs(vF) / 18, 1.4)) + 0.035, 0.03 + (DIM_WB * 25) / Math.max(1, vF * vF));
+    // Speed-sensitive steering: at speed, full lock asks for a little more cornering than the tyres can
+    // give right now, so the car turns as hard as its grip allows without being flicked into a spin.
+    // The grip counted includes the fans' pull, so with the fans on (4,700 kg at full suction) the
+    // steering opens up and the car corners far harder than on its tyres alone.
+    const gripG = MU * (1 + (this.suction * SUCTION_KG) / m + (this.contacts && vF > 0 ? 0.5 * RHO * 1.4 * vF * vF : 0) / (m * G0));
+    const steerMax = Math.min(0.6 / (1 + Math.pow(Math.abs(vF) / 18, 1.4)) + 0.035, 0.1 + (DIM_WB * 1.15 * gripG * G0) / Math.max(1, vF * vF));   // geometry for the turn plus the front tyres' peak slip angle
     const steerT = -inp.steer * steerMax;    // positive = left
-    this.steer += clamp(steerT - this.steer, -3 * h, 3 * h);
+    const slew = Math.min(3, steerMax * 5) * h;   // full lock in ~0.2 s at any speed, so a key tap at 150 mph is not a flick
+    this.steer += clamp(steerT - this.steer, -slew, slew);
 
     // ---- Suction fans ----
     const nAvg = _n.set(0, 0, 0);
@@ -321,12 +325,6 @@ export class Vehicle {
       if (this.fanBoost) target = FAN_MAX;
       // Launch suction rises with the pedal instead of switching on at half throttle.
       if (drive > 0 && Math.abs(vF) < 30) target = Math.max(target, (0.24 + 0.2 * clamp((drive - 0.2) / 0.5, 0, 1)) * m / SUCTION_KG);
-      // Cornering: the fans follow the steering input (the wheel angle itself is tiny at speed) and
-      // the measured cornering load, so the car is pulled down whenever it is turning hard.
-      if (speed > 12) {
-        const latG = Math.abs(this.acc.z) / G;   // acc is in the body frame: z is sideways
-        target = Math.max(target, 0.6 * Math.min(1, Math.abs(inp.steer) / 0.3), 0.7 * Math.min(1, latG / 1.2));
-      }
       if (brake > 0.3) target = Math.max(target, 0.5);
       if (steep || this.onWall) target = 1;
     }
@@ -392,7 +390,8 @@ export class Vehicle {
       const lat = _d.crossVectors(fw, n);
       const vp = this.pointVel(cp, _vp);
       const vLong = vp.dot(fw), vLat = vp.dot(lat);
-      const mu = MU * (w.grip ?? 1) * (inp.handbrake && !w.front ? 0.55 : 1);
+      // rear tyres carry ~10% more grip (wider rears): at the limit the nose runs wide before the tail steps out
+      const mu = MU * (w.grip ?? 1) * (w.front ? 0.95 : 1.05) * (inp.handbrake && !w.front ? 0.55 : 1);
       const muN = mu * N;
       // longitudinal
       let Fx = totalDrive * (w.front ? 0.35 : 0.65) / 2;
@@ -403,8 +402,15 @@ export class Vehicle {
       if (bq > 0) Fx -= clamp(vLong * 9000, -bq, bq);
       Fx -= 0.012 * N * Math.sign(vLong) * Math.min(1, Math.abs(vLong));
       // lateral (slip-angle model, saturating)
-      const lsc = Math.max((w.front ? 0.15 : 0.1) * Math.abs(vLong), 0.5);
+      const lsc = Math.max((w.front ? 0.15 : 0.12) * Math.abs(vLong), 0.5);
       let Fy = -muN * Math.tanh(1.6 * vLat / lsc);
+      // traction control and ABS: drive and brake force only take what the tyre has left after
+      // cornering, so a full pedal mid-corner (1 MW on the rear wheels) doesn't spin the car.
+      // The handbrake bypasses it for deliberate slides.
+      if (!(inp.handbrake && !w.front)) {
+        const room = Math.sqrt(Math.max(0, (muN * 0.97) ** 2 - Fy * Fy));
+        if (Math.abs(Fx) > room) Fx = Math.sign(Fx) * Math.max(room, 0.15 * muN);
+      }
       // friction circle
       const Ft = Math.hypot(Fx, Fy);
       if (Ft > muN && Ft > 0) { const s = muN / Ft; Fx *= s; Fy *= s; }
@@ -417,6 +423,31 @@ export class Vehicle {
       w.spin += (vLong / SUSP.radius) * h;
     }
     this.contacts = contacts;
+
+    // Stability control (as on any road Tesla): when the tail starts to come round (body slip angle
+    // or a yaw rate beyond what the grip supports), brake individual wheels to pull the nose back to
+    // the direction of travel. Modelled as a yaw moment capped at what braking one side can give,
+    // plus the drag of that braking. The handbrake switches it off for deliberate slides.
+    this.esc = 0;
+    if (this.mode === 'drive' && contacts >= 3 && vF > 12 && !inp.handbrake) {
+      const r = this.w.dot(this.up);
+      const rMax = (gripG * G0) / vF * 1.08;
+      const beta = Math.atan2(this.vel.dot(this.right), vF);
+      let Mz = 0;
+      if (Math.abs(r) > rMax) Mz -= (r - Math.sign(r) * rMax) * this.I.y * 6;
+      if (Math.abs(beta) > 0.05) {
+        // rotate the nose toward the velocity: sign from fwd x vel about up
+        const s = Math.sign(_s.crossVectors(this.fwd, this.vel).dot(this.up));
+        Mz += s * (Math.abs(beta) - 0.05) * 9e4;
+      }
+      const cap = 0.85 * MU * (m * G0 + this.suction * SUCTION_KG * G0) * 0.9;
+      Mz = clamp(Mz, -cap, cap);
+      if (Mz) {
+        this.T.addScaledVector(this.up, Mz);
+        this.F.addScaledVector(this.vel, -Math.abs(Mz) / 1.7 / Math.max(1, speed));
+        this.esc = Math.abs(Mz) / cap;
+      }
+    }
 
     // ---- Thrusters ----
     this.boosting = false;

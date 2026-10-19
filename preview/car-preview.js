@@ -86,7 +86,7 @@ if (q.get('view') === 'cockpit') {
 const st = {
   wheels: WHEELS.map((w) => ({ steer: w.front ? num('steer') : 0, spin: 0, y: -COM_H + SUSP.radius })),
   doors: num('doors'), wing: num('wing'), airbrake: num('airbrake'), lights: num('lights'), brake: num('brake'),
-  fans: num('fans'), nozzles: variant.nozzles.map(() => num('noz')), speed: 0, frunk: num('frunk'), steer: num('steer'),
+  fans: num('fans'), nozzles: variant.nozzles.map(() => num('noz')), speed: 0, frunk: num('frunk'), vent: num('vent'), steer: num('steer'),
   cockpit: q.get('view') === 'cockpit' || q.has('live'),
 };
 // demo telemetry for the screen: a lap trace and some live-looking values

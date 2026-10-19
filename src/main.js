@@ -288,7 +288,7 @@ function updateHud(dt) {
     $('lapl').textContent = `Last ${fmtLap(lap.last)}`;
     $('lapb').textContent = `Best ${fmtLap(lap.best)}`;
     $('stuntt').textContent = `PERFORMANCE · SPA-FRANCORCHAMPS · ${spa.night ? 'NIGHT' : 'DAY'}`;
-    $('stuntd').textContent = lap.inPit ? 'Pit lane. Drive out past the end of the pit wall to join the track.' : lap.running ? 'Flying lap. 7.0 km, 19 corners, clockwise.' : 'Out lap. The timer starts at the start/finish line.';
+    $('stuntd').textContent = lap.inPit ? 'Pit lane. Drive out past the end of the pit wall to join the track.' : (lap.running ? 'Flying lap. ' : 'Out lap: the timer starts at the line. ') + (vehicle.fanBoost ? 'Fans on: full suction, about 4 g in the corners.' : `Fan boost (${input.device === 'pad' ? 'LB' : 'F'}) for full suction and far more cornering grip.`);
     return;
   }
   hudTick -= dt;
@@ -589,6 +589,8 @@ function syncModel(dt) {
   mst.lights += ((lights ? 1 : 0) - mst.lights) * kk(5);
   mst.brake = v.braking ? 1 : 0;
   mst.fans = v.suction;
+  // hood outlet: open only while the fans run hard (fan boost, Track Mode / High-Downforce, the wall)
+  mst.vent = v.fanBoost || v.trackMode || v.suction > 0.6 ? 1 : 0;
   mst.nozzles = v.nozzleU;
   mst.speed = v.vFwd;
   model.group.position.copy(v.pos);
