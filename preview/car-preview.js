@@ -20,18 +20,19 @@ document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 const light = q.get('bg') === 'light';
-scene.background = new THREE.Color(light ? 0xe8e8ea : 0x0c0d10);
+const studio = q.get('bg') === 'studio';
+scene.background = new THREE.Color(studio ? 0x4a4b4d : light ? 0xe8e8ea : 0x0c0d10);
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 scene.environmentIntensity = num('env', 0.9);
 
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshStandardMaterial({ color: light ? 0xd8d8da : 0x17181b, roughness: 0.9 }));
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshStandardMaterial({ color: studio ? 0xa9a9ab : light ? 0xd8d8da : 0x17181b, roughness: 0.9 }));
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 if (!q.has('noground') && q.get('view') !== 'under') scene.add(ground);
-scene.add(new THREE.HemisphereLight(0xcfd8ff, 0x202020, 0.6));
+scene.add(new THREE.HemisphereLight(0xcfd8ff, 0x202020, studio ? 0.3 : 0.6));
 const sun = new THREE.DirectionalLight(0xffffff, num("sun", 1.5));
-sun.position.set(4, 8, 5);
+if (studio) sun.position.set(0.5, 10, 1.5); else sun.position.set(4, 8, 5);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -5, right: 5, top: 5, bottom: -5 });

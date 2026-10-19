@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { WHEELS, FANS, SUSP, COM_H } from './spec.js';
 import { CockpitScreen } from './screen.js';
 
@@ -32,6 +32,7 @@ const G = 6; // greenhouse base (glass bottom edge), hood side crease at the fro
 const R = 7; // roof edge / A-pillar line; front-lid seam on the hood
 const T = 8; // roof centre-line
 const NP = 9;
+const CREASE = 0.7; // rad: facets meeting at more than this keep a hard edge
 
 // Key sections [x, [[y, z] for F0..T]]. Linear interpolation between keys keeps every crease straight.
 const KEYS = [
@@ -72,14 +73,43 @@ const ARCH_CY = SUSP.radius - COM_H; // wheel centre height at rest
 const SILL_F = WHEELS[0].x - ARCH_R, SILL_R = WHEELS[2].x + ARCH_R;
 const REAR_Z = [-0.58, -0.22, 0.22, 0.58]; // the four rear nozzles (spec.js REAR)
 
+// Between keys each point follows a monotone cubic (Fritsch-Carlson) along x, so the creases run
+// as smooth, fair curves (no overshoot past the keys) instead of straight segments with kinks.
+const KX = KEYS.map((k) => -k[0]); // ascending
+const SLOPES = [];
+for (let k = 0; k < NP; k++) {
+  for (let c = 0; c < 2; c++) {
+    const y = KEYS.map((key) => key[1][k][c]);
+    const n = y.length, d = [], m = new Array(n).fill(0);
+    for (let i = 0; i < n - 1; i++) d.push((y[i + 1] - y[i]) / (KX[i + 1] - KX[i]));
+    m[0] = d[0]; m[n - 1] = d[n - 2];
+    for (let i = 1; i < n - 1; i++) m[i] = d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2;
+    for (let i = 0; i < n - 1; i++) {
+      if (d[i] === 0) { m[i] = 0; m[i + 1] = 0; continue; }
+      const a = m[i] / d[i], b = m[i + 1] / d[i], h = a * a + b * b;
+      if (h > 9) { const t = 3 / Math.sqrt(h); m[i] = t * a * d[i]; m[i + 1] = t * b * d[i]; }
+    }
+    SLOPES.push(m);
+  }
+}
 function sectionAt(x) {
+  const u = -x;
   let i = 0;
-  while (i < KEYS.length - 2 && x < KEYS[i + 1][0]) i++;
-  const [xa, a] = KEYS[i];
-  const [xb, b] = KEYS[i + 1];
-  const t = clamp01((x - xa) / (xb - xa));
+  while (i < KX.length - 2 && u > KX[i + 1]) i++;
+  const h = KX[i + 1] - KX[i];
+  const t = clamp01((u - KX[i]) / h);
+  const t2 = t * t, t3 = t2 * t;
+  const h00 = 2 * t3 - 3 * t2 + 1, h10 = t3 - 2 * t2 + t, h01 = -2 * t3 + 3 * t2, h11 = t3 - t2;
+  const a = KEYS[i][1], b = KEYS[i + 1][1];
   const out = [];
-  for (let k = 0; k < NP; k++) out.push([a[k][0] + (b[k][0] - a[k][0]) * t, a[k][1] + (b[k][1] - a[k][1]) * t]);
+  for (let k = 0; k < NP; k++) {
+    const p = [0, 0];
+    for (let c = 0; c < 2; c++) {
+      const m = SLOPES[k * 2 + c];
+      p[c] = h00 * a[k][c] + h10 * h * m[i] + h01 * b[k][c] + h11 * h * m[i + 1];
+    }
+    out.push(p);
+  }
   return out;
 }
 // Height of the top surface at (x, |z|), walking the T-R-G-B creases.
@@ -127,8 +157,8 @@ class Mesher {
     if (!arr || !arr.length) return null;
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
-    g.computeVertexNormals();
-    return g;
+    // Smooth shading across the gentle bends between facets; the car's crease lines stay sharp.
+    return toCreasedNormals(g, CREASE);
   }
 }
 
@@ -325,9 +355,10 @@ export class RoadsterModel {
   makeMaterials() {
     const carbon = carbonTexture();
     this.mat = {
-      // satin white paint
+      // satin silver-white paint: a metallic base under a soft clearcoat, so the flanks pick up broad
+      // reflections and fall off into shade like the studio footage instead of reading flat white
       paint: new THREE.MeshPhysicalMaterial({
-        color: 0xd9dbda, metalness: 0.08, roughness: 0.48, clearcoat: 0.35, clearcoatRoughness: 0.45, envMapIntensity: 1.0,
+        color: 0xc9cbcc, metalness: 0.5, roughness: 0.34, clearcoat: 0.6, clearcoatRoughness: 0.22, envMapIntensity: 1.15,
       }),
       black: new THREE.MeshStandardMaterial({ color: 0x0c0d0f, metalness: 0.3, roughness: 0.55 }),
       gloss: new THREE.MeshPhysicalMaterial({ color: 0x08090a, metalness: 0.4, roughness: 0.18, clearcoat: 1 }),
@@ -336,7 +367,7 @@ export class RoadsterModel {
       spoke: new THREE.MeshPhysicalMaterial({ color: 0x0b0b0c, metalness: 0.45, roughness: 0.32, clearcoat: 0.8, envMapIntensity: 0.45 }),
       liner: new THREE.MeshStandardMaterial({ color: 0x141518, roughness: 0.85, side: THREE.FrontSide }),
       glass: new THREE.MeshPhysicalMaterial({
-        color: 0x2a1d14, metalness: 0.35, roughness: 0.05, transparent: true, opacity: 0.86,
+        color: 0x17110c, metalness: 0.45, roughness: 0.04, transparent: true, opacity: 0.9,
         side: THREE.DoubleSide, envMapIntensity: 0.75, clearcoat: 1, clearcoatRoughness: 0.03, depthWrite: false,
       }),
       sill: new THREE.MeshStandardMaterial({ color: 0x9a9fa4, metalness: 0.7, roughness: 0.32 }),
@@ -378,8 +409,18 @@ export class RoadsterModel {
     // sill points lifted to the arch line; the arch-edge stations are doubled so the arch drops
     // vertically to the sill.
     const xs = KEYS.map((k) => k[0]);
+    // fill in between the keys so the curved creases are smooth
+    for (let i = 0; i < KEYS.length - 1; i++) {
+      const xa = KEYS[i][0], xb = KEYS[i + 1][0], n = Math.ceil((xa - xb) / 0.07);
+      for (let j = 1; j < n; j++) {
+        const x = xa + (xb - xa) * (j / n);
+        // keep clear of the leaning door cuts and the raked nose so their skewed stations can't cross a neighbour
+        if (Math.abs(x - DOOR_REAR) < 0.14 || Math.abs(x - DOOR_FRONT) < 0.08 || NOSE_X - x < 0.15) continue;
+        xs.push(x);
+      }
+    }
     const axles = [WHEELS[0].x, WHEELS[2].x];
-    for (const wx of axles) for (let i = 1; i < 10; i++) xs.push(wx + ARCH_R * Math.cos((i / 10) * PI));
+    for (const wx of axles) for (let i = 1; i < 18; i++) xs.push(wx + ARCH_R * Math.cos((i / 18) * PI));
     xs.push(TRUNK_HINGE, LAMP_X);
     const archY = (x) => {
       for (const wx of axles) {
@@ -537,11 +578,11 @@ export class RoadsterModel {
       const a = sectionAt(0.62), b = sectionAt(-0.18);
       const zin = (s, k, d) => (s[k][1] - d) * side;
       const ya = a[C][0] + 0.13, yb = b[C][0] + 0.16;
-      inner.add(barBetween(new THREE.Vector3(0.62, ya - 0.07, zin(a, C, 0.045)), new THREE.Vector3(-0.18, yb - 0.07, zin(b, C, 0.045)), 0.16, 0.014, this.mat.trim));
-      inner.add(barBetween(new THREE.Vector3(0.55, ya, zin(a, C, 0.05)), new THREE.Vector3(-0.12, yb + 0.02, zin(b, C, 0.05)), 0.018, 0.012, this.mat.ambient));
-      inner.add(barBetween(new THREE.Vector3(0.62, ya + 0.05, zin(a, C, 0.04)), new THREE.Vector3(-0.18, yb + 0.07, zin(b, C, 0.04)), 0.06, 0.014, this.mat.alcantara));
+      inner.add(barBetween(new THREE.Vector3(0.62, ya - 0.07, zin(a, C, 0.075)), new THREE.Vector3(-0.18, yb - 0.07, zin(b, C, 0.075)), 0.16, 0.014, this.mat.trim));
+      inner.add(barBetween(new THREE.Vector3(0.55, ya, zin(a, C, 0.08)), new THREE.Vector3(-0.12, yb + 0.02, zin(b, C, 0.08)), 0.018, 0.012, this.mat.ambient));
+      inner.add(barBetween(new THREE.Vector3(0.62, ya + 0.05, zin(a, C, 0.075)), new THREE.Vector3(-0.18, yb + 0.07, zin(b, C, 0.075)), 0.06, 0.014, this.mat.alcantara));
       // pull handle
-      inner.add(barBetween(new THREE.Vector3(0.18, ya - 0.02, zin(a, C, 0.07)), new THREE.Vector3(0.02, yb - 0.01, zin(b, C, 0.07)), 0.02, 0.025, this.mat.silver));
+      inner.add(barBetween(new THREE.Vector3(0.18, ya - 0.02, zin(a, C, 0.1)), new THREE.Vector3(0.02, yb - 0.01, zin(b, C, 0.1)), 0.02, 0.025, this.mat.silver));
       m.add(pivot);
       this.doorObjs.push({ pivot, inner, axis, sign: -side });
     }
@@ -714,6 +755,43 @@ export class RoadsterModel {
       db.bar('black', new THREE.Vector3(0.955, lerp(s0[C][0], s0[B][0], 0.75), (lerp(s0[C][1], s0[B][1], 0.75) + 0.004) * side),
         new THREE.Vector3(0.985, s1[P][0] + 0.03, (s1[P][1] + 0.006) * side), 0.014, 0.008);
       db.bar('black', new THREE.Vector3(0.985, s1[P][0] + 0.03, (s1[P][1] + 0.006) * side), new THREE.Vector3(0.985, s1[C][0], (s1[C][1] + 0.005) * side), 0.014, 0.008);
+      // Track Mode aero flap: the flank panel between the front arch and the door, hinged on its
+      // front edge; with the wing up its rear edge swings out, opening a dark outlet behind it.
+      {
+        const xa = 0.952, xb = 0.858, fTop = 0.7;
+        const pt = (x, f, out) => {
+          const sc = sectionAt(x);
+          const y = f < 0 ? sc[P][0] + 0.025 : lerp(sc[C][0], sc[B][0], f);
+          const z = f < 0 ? sc[P][1] : lerp(sc[C][1], sc[B][1], f);
+          return [x, y, (z + out) * side];
+        };
+        const corners = [pt(xa, fTop, 0.007), pt(xb, fTop, 0.007), pt(xb, 0, 0.007), pt(xb, -1, 0.007), pt(xa, -1, 0.007), pt(xa, 0, 0.007)];
+        const hinge = new THREE.Vector3(...corners[0]).add(new THREE.Vector3(...corners[4])).multiplyScalar(0.5);
+        const fm = new Mesher(), rm = new Mesher();
+        const n = [0, 0, side];
+        const cen = [0, 1, 2, 3, 4, 5].reduce((a, i) => [a[0] + corners[i][0] / 6, a[1] + corners[i][1] / 6, a[2] + corners[i][2] / 6], [0, 0, 0]);
+        for (let i = 0; i < 6; i++) {
+          const a = corners[i], b = corners[(i + 1) % 6];
+          fm.triHint('paint', cen, a, b, n);
+          const ai = [a[0], a[1], a[2] - 0.012 * side], bi = [b[0], b[1], b[2] - 0.012 * side], ci = [cen[0], cen[1], cen[2] - 0.012 * side];
+          fm.triHint('black', ci, ai, bi, [0, 0, -side]);
+          fm.quadHint('black', a, b, bi, ai, [a[0] + b[0] - 2 * cen[0], a[1] + b[1] - 2 * cen[1], 0]);
+          // the outlet behind the flap: a dark recess just inside the skin
+          const ar = [a[0], a[1], a[2] - 0.02 * side], br = [b[0], b[1], b[2] - 0.02 * side], cr = [cen[0], cen[1], cen[2] - 0.02 * side];
+          rm.triHint('black', cr, ar, br, n);
+        }
+        const pivot = new THREE.Group();
+        pivot.position.copy(hinge);
+        const inner = new THREE.Group();
+        inner.position.copy(hinge).negate();
+        pivot.add(inner);
+        inner.add(new THREE.Mesh(fm.geometry('paint'), this.mat.paint), new THREE.Mesh(fm.geometry('black'), this.mat.black));
+        const recess = new THREE.Mesh(rm.geometry('black'), this.mat.recess);
+        recess.visible = false;
+        this.group.add(pivot, recess);
+        const axis = new THREE.Vector3(...corners[0]).sub(new THREE.Vector3(...corners[4])).normalize();
+        (this.flaps || (this.flaps = [])).push({ pivot, axis, sign: side, recess });
+      }
       // silver sill blade between the wheels
       const sf = sectionAt(SILL_F - 0.03), sr = sectionAt(SILL_R + 0.03);
       db.bar('sill', new THREE.Vector3(SILL_F - 0.03, sf[S][0] + 0.03, (sf[S][1] + 0.02) * side), new THREE.Vector3(SILL_R + 0.03, sr[S][0] + 0.06, (sr[S][1] + 0.02) * side), 0.035, 0.03);
@@ -1264,6 +1342,13 @@ export class RoadsterModel {
       const len = this.wingBaseY + lift - 0.24 - sp.position.y;
       sp.visible = lift > 0.1 && len > 0.005;
       sp.scale.y = Math.max(0.001, len);
+    }
+    // Track Mode flaps behind the front wheels open with the wing (not for the airbrake)
+    if (this.flaps) {
+      for (const f of this.flaps) {
+        f.pivot.quaternion.setFromAxisAngle(f.axis, 0.42 * s.wing * f.sign);
+        f.recess.visible = s.wing > 0.02;
+      }
     }
     // lights: the corner panels sink and uncover the lamp bars
     s.lights = ease(s.lights, clamp01(st.lights || 0), 6, dt);
