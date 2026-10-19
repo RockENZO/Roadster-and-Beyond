@@ -93,6 +93,7 @@ Event mode closes with a 0-60 run on the drag strip (the event's timed run was 0
 | Menu / pause / leave Event mode | `Esc` | Menu |
 | Flight assist (auto-level) on/off | `G` | `RS` click |
 | Hide help / mute | `H` / `M` | `LS` click |
+| Controller vibration on/off (remembered) | `N` | Hold `LS` click |
 
 Controller details: radial stick deadzones with a rescaled live zone, response curves on steering and flight inputs, trigger deadzones, speed-sensitive steering, and continuous rumble from thrust, suction and tyre slip. Pads that support trigger rumble get brake load on the left trigger and traction limit on the right. The menu works fully from the controller.
 

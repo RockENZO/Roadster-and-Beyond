@@ -23,7 +23,7 @@ const approach = (v, t, up, back, dt) => {
   return Math.abs(t - v) <= r * dt ? t : v + Math.sign(t - v) * r * dt;
 };
 
-const ACTIONS = ['assist', 'lift', 'track', 'release', 'camera', 'lights', 'doors', 'frunk', 'reset', 'pause', 'confirm', 'back', 'left', 'right', 'up', 'down', 'prev', 'next', 'hints', 'mute', 'sp1', 'sp2', 'sp3', 'sp4', 'sp5'];
+const ACTIONS = ['assist', 'lift', 'track', 'release', 'camera', 'lights', 'doors', 'frunk', 'reset', 'pause', 'confirm', 'back', 'left', 'right', 'up', 'down', 'prev', 'next', 'hints', 'mute', 'vibration', 'sp1', 'sp2', 'sp3', 'sp4', 'sp5'];
 
 export class Input {
   constructor() {
@@ -39,6 +39,9 @@ export class Input {
     this.kThrottle = 0;
     this.kBrake = 0;
     this.rumbleNext = 0;
+    // Controller vibration on/off (N, or hold LS), remembered between visits.
+    try { this.vibration = localStorage.getItem('roadster.vibration') !== '0'; } catch (e) { this.vibration = true; }
+    this.lsHeld = 0;
     this.trigAxis = {};   // per-pad: axis index found to carry each trigger
     addEventListener('keydown', (e) => {
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
@@ -83,8 +86,17 @@ export class Input {
     return a === 0 && !btn?.pressed ? 0 : (a + 1) / 2;
   }
 
+  setVibration(on) {
+    this.vibration = on;
+    try { localStorage.setItem('roadster.vibration', on ? '1' : '0'); } catch (e) { /* private mode */ }
+    const a = this.pad()?.vibrationActuator;
+    if (on) this.rumble(0.5, 0.5, 180);
+    else { try { a?.reset?.(); } catch (e) { /* unsupported */ } }
+  }
+
   // One-shot jolt (landings, crashes).
   rumble(strong, weak, ms) {
+    if (!this.vibration) return;
     const a = this.pad()?.vibrationActuator;
     if (!a?.playEffect) return;
     try { a.playEffect('dual-rumble', { startDelay: 0, duration: ms, strongMagnitude: strong, weakMagnitude: weak }); } catch (e) { /* unsupported */ }
@@ -95,7 +107,7 @@ export class Input {
   // tyre slip, and (on pads that have them) trigger motors for traction limit and brake load.
   feedback(f) {
     const now = performance.now();
-    if (now < this.rumbleNext) return;
+    if (!this.vibration || now < this.rumbleNext) return;
     const a = this.pad()?.vibrationActuator;
     if (!a?.playEffect) return;
     this.rumbleNext = now + 90;
@@ -128,7 +140,8 @@ export class Input {
     raw.right = k('ArrowRight') || k('KeyD') || b(15) || lx > 0.6;
     raw.up = k('ArrowUp') || k('KeyW') || b(12) || ly < -0.6;
     raw.down = k('ArrowDown') || k('KeyS') || b(13) || ly > 0.6;
-    raw.hints = k('KeyH') || b(10);
+    raw.hints = k('KeyH');
+    raw.vibration = k('KeyN');
     raw.assist = k('KeyG') || b(11);
     raw.mute = k('KeyM');
     for (let i = 1; i <= 5; i++) raw['sp' + i] = k('Digit' + i);
@@ -174,6 +187,14 @@ export class Input {
     for (const a of ACTIONS) {
       this.p[a] = !!raw[a] && !this.prev[a];
       this.prev[a] = !!raw[a];
+    }
+    // LS click: a tap hides the help, holding it for half a second turns vibration on or off.
+    if (b(10)) {
+      if (this.lsHeld < 0.5 && this.lsHeld + dt >= 0.5) this.p.vibration = true;
+      this.lsHeld += dt;
+    } else {
+      if (this.lsHeld > 0 && this.lsHeld < 0.5) this.p.hints = true;
+      this.lsHeld = 0;
     }
     // A tap that went down and up within one frame still counts once, then reads as released.
     if (this.tapped.size) {

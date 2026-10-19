@@ -156,7 +156,7 @@ $('spanight').addEventListener('click', () => enterSpa(true));
 
 function menuHint() {
   $('menuhint').innerHTML = input.device === 'pad'
-    ? `Controller ready. <kbd>D-pad</kbd> to choose a car and a button, <kbd>A</kbd> to start.`
+    ? `Controller ready. <kbd>D-pad</kbd> to choose a car and a button, <kbd>A</kbd> to start. Hold <kbd>LS</kbd> to turn vibration ${input.vibration ? 'off' : 'on'}.`
     : `<kbd>Left</kbd> <kbd>Right</kbd> choose a car, <kbd>Up</kbd> <kbd>Down</kbd> choose Drive, Watch or a Spa track day, <kbd>Enter</kbd> to start. Plug in a controller and press any button to use it.`;
 }
 
@@ -219,11 +219,11 @@ function renderHints() {
     ? `<div>${k('RT')} / ${k('LT')} <b>Throttle / brake</b> (hold ${k('LT')} at a stop to reverse) &nbsp; ${k('L stick')} <b>Steer</b></div>
        ${gas}
        <div>${k('X')} <b>Track Mode</b> &nbsp; ${k('LB')} <b>Fan boost</b> (on the wall: fans off) &nbsp; ${k('B')} <b>Handbrake</b></div>
-       <div>${k('Y')} Camera &nbsp; ${k('R stick')} Look &nbsp; ${k('D-pad')} ${k('↑')} Lights ${k('↓')} Doors${onSpa ? '' : ` ${k('←')}${k('→')} Stunts`} &nbsp; ${k('View')} ${onSpa ? 'Back on track' : 'Respawn'} &nbsp; ${k('LS')} Hide help</div>`
+       <div>${k('Y')} Camera &nbsp; ${k('R stick')} Look &nbsp; ${k('D-pad')} ${k('↑')} Lights ${k('↓')} Doors${onSpa ? '' : ` ${k('←')}${k('→')} Stunts`} &nbsp; ${k('View')} ${onSpa ? 'Back on track' : 'Respawn'} &nbsp; ${k('LS')} Hide help, hold for <b>vibration</b> (${input.vibration ? 'on' : 'off'})</div>`
     : `<div>${k('W')} ${k('S')} <b>Throttle / brake</b> (hold ${k('S')} at a stop to reverse) &nbsp; ${k('A')} ${k('D')} <b>Steer</b></div>
        ${gas}
        <div>${k('T')} <b>Track Mode</b> &nbsp; ${k('F')} <b>Fan boost</b> (on the wall: fans off) &nbsp; ${k('B')} <b>Handbrake</b></div>
-       <div>${k('C')} Camera &nbsp; ${k('L')} Lights &nbsp; ${k('O')} Doors &nbsp; ${k('K')} Trunk &nbsp; ${onSpa ? `${k('R')} Back on track` : `${k('1')}-${k('5')} Stunts &nbsp; ${k('R')} Respawn`} &nbsp; ${k('H')} Hide help &nbsp; ${k('M')} Mute &nbsp; ${k('Esc')} Menu</div>`;
+       <div>${k('C')} Camera &nbsp; ${k('L')} Lights &nbsp; ${k('O')} Doors &nbsp; ${k('K')} Trunk &nbsp; ${onSpa ? `${k('R')} Back on track` : `${k('1')}-${k('5')} Stunts &nbsp; ${k('R')} Respawn`} &nbsp; ${k('H')} Hide help &nbsp; ${k('M')} Mute &nbsp; ${k('N')} Vibration (${input.vibration ? 'on' : 'off'}) &nbsp; ${k('Esc')} Menu</div>`;
 }
 input.onDevice = (d) => { renderHints(); menuHint(); toast(d === 'pad' ? `Controller active${input.padName ? ': ' + input.padName.replace(/\(.*\)/, '').trim() : ''}` : 'Keyboard active'); };
 
@@ -654,6 +654,12 @@ function update(dt) {
     try { localStorage.setItem('roadster.assist', vehicle.assist ? '1' : '0'); } catch (e) { /* private mode */ }
     toast(vehicle.assist ? 'Flight assist on: levels itself in the air' : 'Flight assist off: full manual attitude');
     renderHints();
+  }
+  if (P.vibration) {
+    input.setVibration(!input.vibration);
+    toast(input.vibration ? 'Controller vibration on' : 'Controller vibration off');
+    renderHints();
+    menuHint();
   }
   if (P.mute) { sound.muted = !sound.muted; toast(sound.muted ? 'Sound off' : 'Sound on'); }
 
