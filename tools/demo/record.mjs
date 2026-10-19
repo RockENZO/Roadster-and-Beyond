@@ -55,7 +55,7 @@ await p.evaluate(async () => {
     return { throttle: sp < vT ? 1 : 0, brake: sp > vT + 3 ? 1 : 0, steer: Math.max(-1, Math.min(1, -e * 2.2 - (pit ? 0 : L.lat * 0.02))) };
   };
 });
-await p.evaluate(() => { window.__game.enterSpa(false); window.__game.vehicle.respawn(window.__spaAt(420)); window.__game.snapCamera(); });
+await p.evaluate(() => { window.__game.enterSpa(false); document.getElementById('hints').classList.add('off'); window.__game.vehicle.respawn(window.__spaAt(420)); window.__game.snapCamera(); });
 marks.push({ seg: 'spa-day', frame: n });
 for (let i = 0; i < FPS * 12; i++) await tick(await p.evaluate(() => window.__spaDrive()));
 await p.evaluate(() => { window.__game.enterSpa(true); window.__game.snapCamera(); });
