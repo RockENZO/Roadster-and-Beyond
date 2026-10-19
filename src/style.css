@@ -134,3 +134,15 @@ h1 span { color: var(--accent); }
 
 #fatal { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: min(640px, 90vw); z-index: 50; background: rgba(20,8,8,.94); border: 1px solid #ff7a5c; color: #ffd9cf; padding: 18px 22px; border-radius: 12px; font: 14px/1.5 ui-monospace, monospace; white-space: pre-wrap; word-break: break-word; }
 #fatal small { color: #c9a39a; }
+
+/* Spa track day */
+#lap { display: none; }
+#hud.spa #lap { display: block; }
+#hud.spa #score { display: none; }
+#lap b { font-variant-numeric: tabular-nums; }
+#lap small { display: block; font-size: 11px; color: var(--dim); letter-spacing: .08em; font-variant-numeric: tabular-nums; }
+.btns.track { align-items: center; margin-top: 4px; }
+.btns.track .lbl { width: 100%; margin-top: 14px; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+#spaday, #spanight { margin-top: 6px; font: inherit; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 99px; padding: 11px 26px; cursor: pointer; font-size: 13px; }
+#spaday:hover, #spaday.sel, #spanight:hover, #spanight.sel { border-color: var(--accent); color: var(--accent); }
+@media (max-width: 760px) { #spaday, #spanight { padding: 9px 20px; } }

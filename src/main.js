@@ -1,6 +1,6 @@
 import './style.css';
 import * as THREE from 'three';
-import { Vehicle, VARIANTS, MPH } from './physics.js';
+import { Vehicle, VARIANTS, MPH, setMap } from './physics.js';
 import { RoadsterModel } from './car.js';
 import { buildWorld, updateWorld } from './world.js';
 import { Particles } from './fx.js';
@@ -10,6 +10,8 @@ import { WALL, SPAWNS, LINEUP, STRIP, PAD } from './track.js';
 import { EventShow, stuntFor } from './event.js';
 import { BroadcastHud } from './hud.js';
 import { Telemetry } from './screen.js';
+import { SPA_MAP, pitSpawn, inPit, SPA } from './spa-track.js';
+import { buildSpa, updateSpa, LapTimer, fmtLap } from './spa.js';
 
 const $ = (id) => document.getElementById(id);
 const TAU = Math.PI * 2;
@@ -56,10 +58,56 @@ const mst = {
 const telemetry = new Telemetry();
 let lastCtrl = input.s;
 
+// ---------- Spa-Francorchamps track day ----------
+// A separate map and scene: the launch site is left behind entirely while you are at Spa.
+let spa = null;
+let onSpa = false;
+const lap = new LapTimer();
+const activeScene = () => (onSpa ? spa.scene : scene);
+
 function loadModel() {
-  if (model) scene.remove(model.group);
+  if (model) model.group.removeFromParent();
   model = new RoadsterModel(vehicle.p);
-  scene.add(model.group);
+  activeScene().add(model.group);
+}
+
+function enterSpa(night) {
+  if (show.active) { show.stop(); $('show').classList.add('hidden'); }
+  if (!spa) spa = buildSpa(renderer);
+  spa.setNight(night);
+  setMap(SPA_MAP);
+  onSpa = true;
+  selected = keys.indexOf('performance');
+  [...cardsEl.children].forEach((c, n) => c.classList.toggle('sel', n === selected));
+  if (vehicle.p.key !== 'performance') { setVariant('performance'); toast('Track day: Performance only'); }
+  vehicle.respawn(pitSpawn());
+  spa.scene.add(model.group, fx.mesh);
+  renderer.toneMappingExposure = spa.exposure;
+  lights = night;
+  mst.lights = night ? 1 : 0;
+  lap.reset();
+  if (camMode === 3) camMode = 0;
+  closeMenu();
+  $('show').classList.add('hidden');
+  $('hud').classList.remove('hidden');
+  $('hud').classList.add('spa');
+  bhud.show(true); hudMode = 'drive';
+  camOverride = null;
+  snapChase();
+  centerMsg(`SPA-FRANCORCHAMPS<small>${night ? 'Night' : 'Day'} · Pit lane</small>`, '', 2.5);
+  renderHints();
+}
+
+function leaveSpa() {
+  if (!onSpa) return;
+  onSpa = false;
+  setMap(null);
+  scene.add(model.group, fx.mesh);
+  renderer.toneMappingExposure = world.exposure || 1;
+  lights = true;
+  $('hud').classList.remove('spa');
+  vehicle.respawn('start');
+  renderHints();
 }
 
 function setVariant(key, spawn) {
@@ -89,21 +137,27 @@ keys.forEach((k, i) => {
   cardsEl.appendChild(el);
 });
 function select(i) {
+  leaveSpa();
   selected = (i + keys.length) % keys.length;
   [...cardsEl.children].forEach((c, n) => c.classList.toggle('sel', n === selected));
   setVariant(keys[selected], show.active ? undefined : 'start');
 }
+const MENU_BTNS = ['go', 'watch', 'spaday', 'spanight'];
 function menuButtons() {
-  $('go').classList.toggle('sel', menuBtn === 0);
-  $('watch').classList.toggle('sel', menuBtn === 1);
+  MENU_BTNS.forEach((id, n) => $(id).classList.toggle('sel', menuBtn === n));
+}
+function menuConfirm() {
+  [beginDrive, beginShow, () => enterSpa(false), () => enterSpa(true)][menuBtn]();
 }
 $('go').addEventListener('click', () => beginDrive());
 $('watch').addEventListener('click', () => beginShow());
+$('spaday').addEventListener('click', () => enterSpa(false));
+$('spanight').addEventListener('click', () => enterSpa(true));
 
 function menuHint() {
   $('menuhint').innerHTML = input.device === 'pad'
     ? `Controller ready. <kbd>D-pad</kbd> to choose a car and a button, <kbd>A</kbd> to start.`
-    : `<kbd>Left</kbd> <kbd>Right</kbd> choose a car, <kbd>Up</kbd> <kbd>Down</kbd> choose Drive or Watch, <kbd>Enter</kbd> to start. Plug in a controller and press any button to use it.`;
+    : `<kbd>Left</kbd> <kbd>Right</kbd> choose a car, <kbd>Up</kbd> <kbd>Down</kbd> choose Drive, Watch or a Spa track day, <kbd>Enter</kbd> to start. Plug in a controller and press any button to use it.`;
 }
 
 function closeMenu() {
@@ -115,6 +169,7 @@ function closeMenu() {
 
 function beginDrive() {
   if (show.active) show.stop();
+  leaveSpa();
   closeMenu();
   $('show').classList.add('hidden');
   $('hud').classList.remove('hidden');
@@ -125,6 +180,7 @@ function beginDrive() {
 }
 
 function beginShow() {
+  leaveSpa();
   closeMenu();
   $('hud').classList.add('hidden');
   $('show').classList.remove('hidden');
@@ -138,7 +194,9 @@ function openMenu() {
   bhud.show(false);
   setCaption('');
   $('menu').classList.remove('hidden');
-  $('go').textContent = started ? 'Resume' : 'Drive';
+  $('go').textContent = started && !onSpa ? 'Resume' : 'Drive';
+  $('spaday').textContent = onSpa && !spa.night ? 'Restart Spa day' : 'Spa · Day';
+  $('spanight').textContent = onSpa && spa.night ? 'Restart Spa night' : 'Spa · Night';
   menuHint();
 }
 
@@ -161,11 +219,11 @@ function renderHints() {
     ? `<div>${k('RT')} / ${k('LT')} <b>Throttle / brake</b> (hold ${k('LT')} at a stop to reverse) &nbsp; ${k('L stick')} <b>Steer</b></div>
        ${gas}
        <div>${k('X')} <b>Track Mode</b> &nbsp; ${k('LB')} <b>Fan boost</b> (on the wall: fans off) &nbsp; ${k('B')} <b>Handbrake</b></div>
-       <div>${k('Y')} Camera &nbsp; ${k('R stick')} Look &nbsp; ${k('D-pad')} ${k('↑')} Lights ${k('↓')} Doors ${k('←')}${k('→')} Stunts &nbsp; ${k('View')} Respawn &nbsp; ${k('LS')} Hide help</div>`
+       <div>${k('Y')} Camera &nbsp; ${k('R stick')} Look &nbsp; ${k('D-pad')} ${k('↑')} Lights ${k('↓')} Doors${onSpa ? '' : ` ${k('←')}${k('→')} Stunts`} &nbsp; ${k('View')} ${onSpa ? 'Back on track' : 'Respawn'} &nbsp; ${k('LS')} Hide help</div>`
     : `<div>${k('W')} ${k('S')} <b>Throttle / brake</b> (hold ${k('S')} at a stop to reverse) &nbsp; ${k('A')} ${k('D')} <b>Steer</b></div>
        ${gas}
        <div>${k('T')} <b>Track Mode</b> &nbsp; ${k('F')} <b>Fan boost</b> (on the wall: fans off) &nbsp; ${k('B')} <b>Handbrake</b></div>
-       <div>${k('C')} Camera &nbsp; ${k('L')} Lights &nbsp; ${k('O')} Doors &nbsp; ${k('K')} Trunk &nbsp; ${k('1')}-${k('5')} Stunts &nbsp; ${k('R')} Respawn &nbsp; ${k('H')} Hide help &nbsp; ${k('M')} Mute &nbsp; ${k('Esc')} Menu</div>`;
+       <div>${k('C')} Camera &nbsp; ${k('L')} Lights &nbsp; ${k('O')} Doors &nbsp; ${k('K')} Trunk &nbsp; ${onSpa ? `${k('R')} Back on track` : `${k('1')}-${k('5')} Stunts &nbsp; ${k('R')} Respawn`} &nbsp; ${k('H')} Hide help &nbsp; ${k('M')} Mute &nbsp; ${k('Esc')} Menu</div>`;
 }
 input.onDevice = (d) => { renderHints(); menuHint(); toast(d === 'pad' ? `Controller active${input.padName ? ': ' + input.padName.replace(/\(.*\)/, '').trim() : ''}` : 'Keyboard active'); };
 
@@ -225,6 +283,14 @@ function updateHud(dt) {
   $('t60v').textContent = t.state === 'run' ? t.t.toFixed(2) + ' s' : t.result != null ? t.result.toFixed(2) + ' s' : '--';
   $('t60b').textContent = best60[v.p.key] ? `Best ${best60[v.p.key].toFixed(2)} s` : 'Throttle from a stop';
   $('scorev').textContent = Math.round(score).toLocaleString();
+  if (onSpa) {
+    $('lapv').textContent = lap.running ? fmtLap(lap.t) : 'OUT LAP';
+    $('lapl').textContent = `Last ${fmtLap(lap.last)}`;
+    $('lapb').textContent = `Best ${fmtLap(lap.best)}`;
+    $('stuntt').textContent = `PERFORMANCE · SPA-FRANCORCHAMPS · ${spa.night ? 'NIGHT' : 'DAY'}`;
+    $('stuntd').textContent = lap.inPit ? 'Pit lane. Drive out past the end of the pit wall to join the track.' : lap.running ? 'Flying lap. 7.0 km, 19 corners, clockwise.' : 'Out lap. The timer starts at the start/finish line.';
+    return;
+  }
   hudTick -= dt;
   if (hudTick <= 0) {
     hudTick = 0.25;
@@ -356,7 +422,7 @@ function emitFx(dt) {
     if (_d.y < -0.5 && _p.y < 9 && Math.random() < u * (1 - _p.y / 10) * 0.9) {
       for (let i = 0; i < 2; i++) {
         const a = Math.random() * TAU, sp = 5 + Math.random() * 9;
-        _r.set(_p.x + rnd(0.6), 0.25, _p.z + rnd(0.6));
+        _r.set(_p.x + rnd(0.6), groundY(_p.x, _p.z) + 0.25, _p.z + rnd(0.6));
         _v.set(Math.cos(a) * sp, 0.6 + Math.random() * 2.2, Math.sin(a) * sp);
         const red = Math.random() < 0.3;
         fx.emit(_r, _v, { life: 2.6 + Math.random() * 2.2, size: 1.3, grow: 4.5, alpha: 0.26, color: red ? [1, 0.55, 0.6] : [0.92, 0.94, 0.97], drag: 0.9, grav: -0.25 });
@@ -383,7 +449,7 @@ function emitFx(dt) {
     }
   }
   // Smoke machines around the venue.
-  smokeAcc += dt * (world.smoke?.length || 0) * 2.2;
+  smokeAcc += onSpa ? 0 : dt * (world.smoke?.length || 0) * 2.2;
   while (smokeAcc > 1) {
     smokeAcc -= 1;
     const s = world.smoke[(Math.random() * world.smoke.length) | 0];
@@ -410,6 +476,12 @@ const TV = [
 ].map((a) => new THREE.Vector3(...a));
 
 function setCam(c) { camOverride = c; }
+const groundY = (x, z) => (onSpa ? SPA_MAP.heightAt(x, z) : 0);
+function snapChase() {
+  const v = vehicle;
+  lastFlat.copy(v.fwd).setY(0).normalize(); flat.copy(lastFlat);
+  camPos.copy(v.pos).addScaledVector(flat, -7).setY(v.pos.y + 2);
+}
 
 function updateCamera(dt, t) {
   const v = vehicle;
@@ -456,7 +528,7 @@ function updateCamera(dt, t) {
   const target = _v.copy(v.pos);
   let desired, look;
   let fov = 58 + Math.min(speed, 90) * 0.18;
-  if (camMode === 3) {
+  if (camMode === 3 && !onSpa) {
     let best = TV[0], bd = Infinity;
     for (const c of TV) { const d = c.distanceTo(target); if (d < bd) { bd = d; best = c; } }
     if (camPos.distanceTo(best) > 0.5) camPos.copy(best);
@@ -487,7 +559,7 @@ function updateCamera(dt, t) {
     camPos.x += rnd(0.22) * shake; camPos.y += rnd(0.22) * shake; camPos.z += rnd(0.22) * shake;
     shake *= Math.exp(-dt * 6);
   }
-  if (camMode !== 2) camPos.y = Math.max(camPos.y, 0.5);
+  if (camMode !== 2) camPos.y = Math.max(camPos.y, groundY(camPos.x, camPos.z) + 0.5);
   camera.position.copy(camPos);
   camLook.lerp(look, camMode >= 2 ? 1 : k(14));
   camera.lookAt(camLook);
@@ -591,9 +663,9 @@ function update(dt) {
   if (menuOpen) {
     if (P.left) select(selected - 1);
     if (P.right) select(selected + 1);
-    if (P.up || P.down) { menuBtn = 1 - menuBtn; menuButtons(); }
-    if (P.confirm) { if (menuBtn === 1) beginShow(); else beginDrive(); }
-    else if (P.pause && started) beginDrive();
+    if (P.up || P.down) { menuBtn = (menuBtn + (P.down ? 1 : -1) + MENU_BTNS.length) % MENU_BTNS.length; menuButtons(); }
+    if (P.confirm) menuConfirm();
+    else if (P.pause && started) { if (onSpa) { closeMenu(); $('hud').classList.remove('hidden'); bhud.show(true); } else beginDrive(); }
   } else if (show.active) {
     if (P.pause || P.back) { show.stop(); beginDrive(); }
     else {
@@ -603,15 +675,19 @@ function update(dt) {
   } else {
     run = true;
     if (P.pause) openMenu();
-    if (P.camera) { camMode = (camMode + 1) % CAMS.length; toast(CAMS[camMode]); }
+    if (P.camera) { camMode = (camMode + 1) % (onSpa ? 3 : CAMS.length); toast(CAMS[camMode]); }
     if (P.lights) { lights = !lights; toast(lights ? 'Headlights on: corner panels drop' : 'Headlights off'); }
     if (P.doors) { mst.doorsT = mst.doorsT ? 0 : 1; if (Math.abs(vehicle.vFwd) > 3) toast('Stop to open the doors'); }
     if (P.frunk) { mst.frunkT = mst.frunkT ? 0 : 1; if (Math.abs(vehicle.vFwd) > 3) toast('Stop to open the trunk'); }
     if (P.hints) $('hints').classList.toggle('off');
-    if (P.reset) { vehicle.respawn(stuntFor(vehicle.pos)); centerMsg(vehicle.spawn.label, '', 1); }
+    if (P.reset) {
+      if (onSpa) { vehicle.respawn(lap.inPit ? pitSpawn() : SPA_MAP.respawnNear(vehicle.pos)); lap.reset(); snapChase(); }
+      else vehicle.respawn(stuntFor(vehicle.pos));
+      centerMsg(vehicle.spawn.label, '', 1);
+    }
     let jump = null;
-    for (let i = 1; i <= 5; i++) if (P['sp' + i]) jump = SPAWNS[i - 1];
-    if (P.next || P.prev) {
+    for (let i = 1; i <= 5; i++) if (P['sp' + i] && !onSpa) jump = SPAWNS[i - 1];
+    if ((P.next || P.prev) && !onSpa) {
       const i = SPAWNS.indexOf(stuntFor(vehicle.pos));
       jump = SPAWNS[(i + (P.next ? 1 : -1) + SPAWNS.length) % SPAWNS.length];
     }
@@ -628,6 +704,7 @@ function update(dt) {
       acc -= STEP;
       n++;
       handleEvents();
+      if (onSpa) lapEvent(lap.update(STEP, vehicle.pos));
     }
     if (n === 10) acc = 0;
   }
@@ -637,7 +714,9 @@ function update(dt) {
   if (!menuOpen || show.active) emitFx(dt);
   fx.update(dt);
   updateCamera(dt, clock);
-  updateWorld(world, dt, clock, vehicle.pos, {
+  vehicle.groundY = groundY(vehicle.pos.x, vehicle.pos.z);
+  if (onSpa) updateSpa(spa, dt, vehicle.pos);
+  else updateWorld(world, dt, clock, vehicle.pos, {
     mph: Math.abs(vehicle.vFwd) * MPH, variant: vehicle.p.name, gas: vehicle.p.gas ? vehicle.gas / vehicle.p.gas : undefined,
     suction: vehicle.suction, t60: vehicle.t60.result, stunt: show.active ? show.seg.title : stuntFor(vehicle.pos).label,
   });
@@ -656,7 +735,7 @@ function update(dt) {
     }
   }
   bhud.update(dt, vehicle, mst, hudMode);
-  renderer.render(scene, camera);
+  renderer.render(activeScene(), camera);
   bhud.render();
 }
 
@@ -669,6 +748,14 @@ if (params.get('start')) {
   if (i >= 0) { select(i); beginDrive(); }
 }
 if (params.get('event') != null) beginShow();
+if (params.get('spa')) enterSpa(params.get('spa') === 'night');
+
+function lapEvent(ev) {
+  if (!ev) return;
+  popup(`LAP  ${fmtLap(ev.time)}`, true);
+  if (ev.best) popup('NEW BEST LAP', false);
+  sound.ding();
+}
 
 function advance(seconds, ctrl = {}, pressed = {}) {
   Object.assign(input.s, ctrl);
@@ -677,6 +764,6 @@ function advance(seconds, ctrl = {}, pressed = {}) {
 }
 window.__game = {
   advance, tick: update, snapCamera: () => { updateCamera(10, clock); updateCamera(10, clock); }, fx, vehicle, input, camera, scene,
-  setVariant, select, beginDrive, beginShow, show, get model() { return model; }, SPAWNS, mst, world,
+  setVariant, select, beginDrive, beginShow, show, enterSpa, leaveSpa, lap, get spa() { return spa; }, get model() { return model; }, SPAWNS, mst, world,
 };
 requestAnimationFrame(frame);

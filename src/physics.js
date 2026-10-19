@@ -30,10 +30,17 @@ const clamp = THREE.MathUtils.clamp;
 // Each returns a surface tag ('ground' | 'wall' | 'box') or null, and writes the normal into outN.
 const hitInfo = { t: 0, tag: null, box: null };
 
+// A map other than the launch site (Spa) supplies its own surface and barriers; null = launch site.
+let MAP = null;
+export function setMap(m) { MAP = m; }
+export function currentMap() { return MAP; }
+
 function raycast(o, d, maxT, outN) {
+  hitInfo.box = null;
+  hitInfo.grip = 1;
+  if (MAP) { hitInfo.tag = MAP.raycast(o, d, maxT, outN, hitInfo); return hitInfo.tag; }
   let best = maxT;
   let tag = null;
-  hitInfo.box = null;
   // Flat ground.
   if (d.y < -1e-6) {
     const t = -o.y / d.y;
@@ -87,6 +94,7 @@ const penInfo = { tag: null, box: null };
 function penetrate(p, outN) {
   let depth = 0;
   penInfo.tag = null; penInfo.box = null;
+  if (MAP) return MAP.penetrate(p, outN, penInfo);
   if (p.y < 0) { depth = -p.y; outN.set(0, 1, 0); penInfo.tag = 'ground'; }
   // C-wall structure: a box with the drive-surface cylinder cut out of it.
   const dz = p.z - WALL.zc;
@@ -147,15 +155,17 @@ export class Vehicle {
     this.mass = p.mass;
     this.I = new THREE.Vector3(...p.inertia);
     this.nozzleU = new Float32Array(p.nozzles.length);
-    this.spawn = SPAWNS[0];
-    this.respawn(SPAWNS[0]);
+    const first = MAP ? MAP.spawns[0] : SPAWNS[0];
+    this.spawn = first;
+    this.respawn(first);
   }
 
   respawn(sp = this.spawn) {
-    if (typeof sp === 'string') sp = SPAWNS.find((s) => s.key === sp) || SPAWNS[0];
+    const list = MAP ? MAP.spawns : SPAWNS;
+    if (typeof sp === 'string') sp = list.find((s) => s.key === sp) || list[0];
     this.spawn = sp;
     this.mode = 'drive';
-    this.pos.set(sp.x, 0.5, sp.z);
+    this.pos.set(sp.x, (sp.y || 0) + 0.5, sp.z);
     this.q.setFromAxisAngle(WORLD_UP, sp.yaw || 0);
     this.vel.set(0, 0, 0);
     this.lastVel.set(0, 0, 0);
@@ -259,7 +269,8 @@ export class Vehicle {
       this.crashT -= dt;
       if (this.crashT <= 0) {
         let best = SPAWNS[0], bd = Infinity;
-        for (const s of SPAWNS) {
+        if (MAP) best = MAP.respawnNear(this.pos);
+        else for (const s of SPAWNS) {
           const d = Math.hypot(s.x - this.pos.x, s.z - this.pos.z);
           if (d < bd) { bd = d; best = s; }
         }
@@ -351,6 +362,7 @@ export class Vehicle {
       contacts++;
       w.contact = true;
       w.tag = tag;
+      w.grip = hitInfo.grip;
       const comp = maxT - hitInfo.t;
       const compVel = was ? (comp - w.comp) / h : 0;
       w.comp = comp;
@@ -372,7 +384,7 @@ export class Vehicle {
       const lat = _d.crossVectors(fw, n);
       const vp = this.pointVel(cp, _vp);
       const vLong = vp.dot(fw), vLat = vp.dot(lat);
-      const mu = MU * (inp.handbrake && !w.front ? 0.55 : 1);
+      const mu = MU * (w.grip ?? 1) * (inp.handbrake && !w.front ? 0.55 : 1);
       const muN = mu * N;
       // longitudinal
       let Fx = totalDrive * (w.front ? 0.35 : 0.65) / 2;
@@ -421,16 +433,16 @@ export class Vehicle {
     }
     if (this.mode === 'drive') {
       if (roof) this.crash(this.onWall ? 'Fell off the wall' : 'Rolled onto the roof');
-      else if (hard > 11 || (hardSide && hardTag === 'box' && hard > 5) || (hardSide && hardTag === 'wall' && hard > 7)) {
-        this.crash(hardTag === 'box' ? `Hit the ${hardBox.car.name}` : hardTag === 'wall' ? 'Hit the C-wall structure' : 'Hit the ground too hard');
+      else if ((hard > 11 && hardTag !== 'barrier') || (hardTag === 'barrier' && hard > 16) || (hardSide && hardTag === 'box' && hard > 5) || (hardSide && hardTag === 'wall' && hard > 7)) {
+        this.crash(hardTag === 'box' ? `Hit the ${hardBox.car.name}` : hardTag === 'wall' ? 'Hit the C-wall structure' : hardTag === 'barrier' ? 'Hit the barrier' : 'Hit the ground too hard');
       }
       if (side && contacts < 2 && speed < 2) this.tipT += h; else this.tipT = 0;
       if (this.tipT > 1.5) this.crash('Tipped over');
     }
 
     // ---- World bounds ----
-    if (this.pos.x < BOUNDS.x0 || this.pos.x > BOUNDS.x1) { this.F.x += (this.pos.x < BOUNDS.x0 ? 1 : -1) * m * 30; this.vel.x *= 0.98; }
-    if (this.pos.z < BOUNDS.z0 || this.pos.z > BOUNDS.z1) { this.F.z += (this.pos.z < BOUNDS.z0 ? 1 : -1) * m * 30; this.vel.z *= 0.98; }
+    if (!MAP && (this.pos.x < BOUNDS.x0 || this.pos.x > BOUNDS.x1)) { this.F.x += (this.pos.x < BOUNDS.x0 ? 1 : -1) * m * 30; this.vel.x *= 0.98; }
+    if (!MAP && (this.pos.z < BOUNDS.z0 || this.pos.z > BOUNDS.z1)) { this.F.z += (this.pos.z < BOUNDS.z0 ? 1 : -1) * m * 30; this.vel.z *= 0.98; }
 
     // ---- Integrate ----
     this.vel.addScaledVector(this.F, h / m);

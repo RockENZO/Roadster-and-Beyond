@@ -85,7 +85,7 @@ export class BroadcastHud {
   update(dt, v, mst, mode) {
     if (!this.visible) return;
     this.setVariant(v.p);
-    const alt = Math.max(0, v.pos.y - 0.48) * FT;
+    const alt = Math.max(0, v.pos.y - (v.groundY || 0) - 0.48) * FT;
     const gRaw = Math.hypot(v.acc.x + 9.81 * v.fwd.y, v.acc.y + 9.81 * v.up.y, v.acc.z + 9.81 * v.right.y) / 9.81;
     this.g = (this.g ?? 1) + (Math.min(gRaw, 6) - (this.g ?? 1)) * Math.min(1, dt * 5);
     const g = this.g;
