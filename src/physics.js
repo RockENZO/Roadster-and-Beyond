@@ -10,6 +10,7 @@ export const MPH = 2.23694;
 // fires them to hold an attitude. Everything runs at 240 Hz in substeps.
 
 const SUB = 2;            // substeps per game step (game steps at 120 Hz)
+const DIM_WB = 2.72;     // wheelbase (spec.js DIM.wheelbase)
 const MU = 1.26;          // tyre friction: launch coverage quoted ~1.26 g from tyres alone
 const SUCTION_KG = 4700;  // fans: 4,700 kg of downforce at full suction (the broadcast HUD peaked at ~4,700 kg)
 const POWER = 1.0e6;      // ~1 MW
@@ -300,7 +301,9 @@ export class Vehicle {
       if (this.revT > 0.35 && inp.throttle < 0.02) drive = -inp.brake;
       else { brake = inp.brake; this.braking = vF > 0.8; }
     }
-    const steerMax = 0.6 / (1 + Math.pow(Math.abs(vF) / 18, 1.4)) + 0.035;
+    // Speed-sensitive steering: full lock asks for about 2.5 g of cornering at any speed above ~25 mph,
+    // so a full-stick (or keyboard) input at 130 mph can't flick the car into a spin.
+    const steerMax = Math.min(0.6 / (1 + Math.pow(Math.abs(vF) / 18, 1.4)) + 0.035, 0.03 + (DIM_WB * 25) / Math.max(1, vF * vF));
     const steerT = -inp.steer * steerMax;    // positive = left
     this.steer += clamp(steerT - this.steer, -3 * h, 3 * h);
 
@@ -318,7 +321,12 @@ export class Vehicle {
       if (this.fanBoost) target = FAN_MAX;
       // Launch suction rises with the pedal instead of switching on at half throttle.
       if (drive > 0 && Math.abs(vF) < 30) target = Math.max(target, (0.24 + 0.2 * clamp((drive - 0.2) / 0.5, 0, 1)) * m / SUCTION_KG);
-      if (speed > 15) target = Math.max(target, 0.45 * Math.min(1, Math.abs(this.steer) / 0.12));
+      // Cornering: the fans follow the steering input (the wheel angle itself is tiny at speed) and
+      // the measured cornering load, so the car is pulled down whenever it is turning hard.
+      if (speed > 12) {
+        const latG = Math.abs(this.acc.z) / G;   // acc is in the body frame: z is sideways
+        target = Math.max(target, 0.6 * Math.min(1, Math.abs(inp.steer) / 0.3), 0.7 * Math.min(1, latG / 1.2));
+      }
       if (brake > 0.3) target = Math.max(target, 0.5);
       if (steep || this.onWall) target = 1;
     }
@@ -395,12 +403,15 @@ export class Vehicle {
       if (bq > 0) Fx -= clamp(vLong * 9000, -bq, bq);
       Fx -= 0.012 * N * Math.sign(vLong) * Math.min(1, Math.abs(vLong));
       // lateral (slip-angle model, saturating)
-      const lsc = Math.max(0.15 * Math.abs(vLong), 0.5);
+      const lsc = Math.max((w.front ? 0.15 : 0.1) * Math.abs(vLong), 0.5);
       let Fy = -muN * Math.tanh(1.6 * vLat / lsc);
       // friction circle
       const Ft = Math.hypot(Fx, Fy);
       if (Ft > muN && Ft > 0) { const s = muN / Ft; Fx *= s; Fy *= s; }
       w.slip = vLat;
+      // How far the tyre is past its peak (m/s of sideways slide): drives tyre smoke, squeal and rumble,
+      // so normal cornering at high speed (a few degrees of slip angle) doesn't read as a skid.
+      w.slide = Math.max(0, Math.abs(vLat) - Math.max(1.5, 0.75 * lsc)) + (Ft > muN * 1.02 ? 0.5 : 0);
       _f.copy(n).multiplyScalar(Fs).addScaledVector(fw, Fx).addScaledVector(lat, Fy);
       this.addForceAt(_f, cp);
       w.spin += (vLong / SUSP.radius) * h;

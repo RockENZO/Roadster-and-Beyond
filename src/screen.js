@@ -78,7 +78,7 @@ export class Telemetry {
       this.brakeT[i] = approach(this.brakeT[i], Math.min(1600, target), bheat > 1 ? 0.6 : 0.05, dt);
       const w = v.wheels[i];
       const load = w && w.contact ? w.load : 0;
-      const slip = w && w.contact ? Math.abs(w.slip) : 0;
+      const slip = w && w.contact ? (w.slide || 0) : 0;
       this.tyreT[i] = approach(this.tyreT[i], 58 + Math.min(60, slip * 6 + speed * 0.25 + (front ? 0 : thr * 8)), 0.12, dt);
       t.tyres[i].psi = 27 + Math.min(6, load / 4500);
       t.tyres[i].temp = this.tyreT[i];

@@ -433,7 +433,7 @@ function emitFx(dt) {
   if (v.mode === 'drive') {
     for (const w of v.wheels) {
       if (!w.contact) continue;
-      const slide = Math.abs(w.slip) > 2.6 || (v.handbrake && !w.front && v.vel.length() > 4);
+      const slide = (w.slide || 0) > 1.1 || (v.handbrake && !w.front && v.vel.length() > 4);
       if (!slide || Math.random() > 0.6) continue;
       _v.set(rnd(1.5), 0.8 + Math.random() * 1.5, rnd(1.5)).addScaledVector(v.vel, 0.15);
       fx.emit(w.cp, _v, { life: 1.1, size: 0.8, grow: 3, alpha: 0.32, color: [0.92, 0.92, 0.94], drag: 1.6 });
@@ -728,7 +728,7 @@ function update(dt) {
   });
   if (!menuOpen && !show.active) updateHud(dt);
   if (!menuOpen) {
-    const slip = vehicle.wheels.reduce((s, w) => s + (w.contact ? Math.abs(w.slip) : 0), 0) / 4;
+    const slip = vehicle.wheels.reduce((s, w) => s + (w.contact ? (w.slide || 0) : 0), 0) / 4;
     let thrust = 0;
     for (let i = 0; i < vehicle.nozzleU.length; i++) thrust += vehicle.nozzleU[i];
     thrust = Math.min(1, thrust / 4);
