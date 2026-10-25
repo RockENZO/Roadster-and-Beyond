@@ -1,0 +1,21 @@
+name: README references
+
+# Scripts or screenshots can change without an accompanying README edit.
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  readme:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check documented local references and package scripts
+        uses: RockENZO/readme-reality@abd57409da2c959593127e4c6930132854f11114 # v0.1.1
+        with:
+          root: .
+          readme: README.md

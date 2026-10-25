@@ -41,6 +41,15 @@ npm run build    # static site in dist/
 
 Pushing to `main` deploys to GitHub Pages through `.github/workflows/deploy.yml`. Add `?event` to the URL to start straight into Event mode, or `?spa=day` / `?spa=night` for the track day.
 
+## README checks
+
+Pushes and pull requests run a read-only check of local README links, images and
+supported commands against the source snapshot. It checks that documented
+`npm run` scripts are declared in `package.json`, without executing those scripts
+or installing game dependencies. The Action is pinned to the reviewed Readme
+Reality v0.1.1 commit. Read its summary for skipped coverage: a passing static
+check does not validate game physics, browser interactions or external links.
+
 ## What is in it
 
 **The car**, modelled from Tesla's official photos, the close-look video and the Track Mode reveal: a low wedge in satin silver with smooth, creased surfacing with a black lower body and silver sill blades, a bronze glass canopy from the windshield to the tail, a raked black nose under a full-width light line, headlamps hidden under a triangular panel on each front corner of the hood that sinks at its rear edge to uncover the lamp bar, a hood outlet that only opens when the fans run hard (the front lid's rear edge sinks below the windshield base, as in the High-Downforce Mode shots of the reveal), a rear trunk lid behind the cabin that swings up over the carbon-wrapped gas sphere, amber markers over the outlets behind the front wheels, butterfly doors, a deck wing that rises up and back on swan-neck struts and tilts into an airbrake, fender flaps behind each wheel that open in Track Mode, a full-width red tail bar with lit lettering over a lit RDSTR plate, four gold-lined cold-gas nozzles over four suction-fan bays in a carbon diffuser, and six-spoke wheels on aero discs. Inside: white buckets with lit badges, belts, a dark alcantara dash with carbon trim and a red ambient strip, the squared yoke (it turns with the steering), a console tray, the roll hoop, and the floating touchscreen, which in the cockpit camera shows live telemetry in the car's Track Mode layout (speed, gear, battery, brake/accel/regen, temperatures, g-meter, lap trace, tyres, 0-60 session and thruster gas).
