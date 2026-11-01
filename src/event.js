@@ -6,7 +6,7 @@ import { WALL, LINEUP_X, STRIP, FLIP_PAD, SPAWNS } from './track.js';
 // same physics and the same controls a player has, so it can all be done by hand.
 
 const clamp = THREE.MathUtils.clamp;
-const NONE = () => ({ throttle: 0, brake: 0, steer: 0, pitch: 0, roll: 0, yaw: 0, boost: false, lift: false, handbrake: false });
+const NONE = () => ({ throttle: 0, brake: 0, steer: 0, pitch: 0, roll: 0, yaw: 0, boost: false, lift: false, land: false, handbrake: false });
 const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
 
 // Hold a lane: z target and +x heading.
@@ -75,8 +75,9 @@ export const SEGMENTS = [
         if (v.airborne) s.ph = 'fall';
       } else if (s.ph === 'fall') {
         // As in the clip: leave the lip upside down, barrel-roll upright about the long axis (flight
-        // assist rolls rather than flips), then come down flat on all four lift jets, slowing near the ground.
-        c.lift = true; c.brake = v.pos.y > 9 ? 0.9 : v.pos.y > 3.5 ? 0.45 : 0.25;
+        // assist rolls rather than flips), then fall flat with the lift jets off and catch the car with
+        // one short late burn on all four (the gas-saving landing from vibe-motion/hoverslam).
+        c.lift = true; c.land = true;
         if (v.contacts >= 3) { s.ph = 'out'; s.tl = t; }
       } else {
         c.brake = Math.abs(v.vFwd) > 0.3 ? 0.5 : 0;
@@ -107,8 +108,9 @@ export const SEGMENTS = [
         if (v.pos.x >= LINEUP_X - 30) { s.ph = 'air'; s.th = t; s.m0 = s.f; P = { lift: true }; }
       } else if (s.ph === 'air') {
         const a = t - s.th;
-        // Lift for the hop, then again once the roll is done to set the car down softly.
-        c.lift = a < 0.42 || (s.rolled || 0) >= 2 * Math.PI - 0.75; c.brake = a > 0.42 ? 0.3 : 0;
+        // Lift for the hop; once the roll is done, a late burn sets the car down softly.
+        const done = (s.rolled || 0) >= 2 * Math.PI - 0.75;
+        c.lift = a < 0.42 || done; c.land = done;
         // Hold the roll for nearly the whole turn so the jets only push hard while the car is near
         // upright (spin-up and the final catch); flight assist stops it level on the same heading.
         s.rolled = (s.rolled || 0) + Math.abs(v.w.x) / 20;
@@ -141,7 +143,7 @@ export const SEGMENTS = [
       if (s.ph === 'wait') { if (t > 2) { s.ph = 'air'; s.th = t; s.m0 = s.f; P = { lift: true }; } }
       else if (s.ph === 'air') {
         const a = t - s.th;
-        c.lift = true; c.brake = 0.4;
+        c.lift = true; c.land = s.land = s.land || (a > 1.2 && v.up.y > 0.6);
         c.pitch = a > 0.15 && a < 1.2 ? -1 : 0;
         if (a > 1 && v.contacts >= 3) { s.ph = 'out'; s.tl = t; s.m1 = s.f; }
       } else if (t - s.tl > 2.6) return { c, done: true };

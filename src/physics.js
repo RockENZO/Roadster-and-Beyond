@@ -25,6 +25,14 @@ const V = () => new THREE.Vector3();
 const _a = V(), _b = V(), _c = V(), _d = V(), _e = V(), _f = V(), _n = V(), _r = V(), _vp = V(), _t = V(), _s = V();
 const _q = new THREE.Quaternion(), _qi = new THREE.Quaternion();
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
+const DOWN = new THREE.Vector3(0, -1, 0), _ln = V();
+// Late-burn landing (after vibe-motion/hoverslam): coast with the lift jets off, then fire them hard
+// at the last moment so the car arrives at the ground at a gentle touchdown speed. Gas use tracks
+// time on the jets, so the shortest burn that still stops in time is the cheapest. The burn is
+// planned on MARGIN of full lift so there is thrust in reserve, then trimmed every step.
+// Values found by a search on the event stunts (fewest kg of gas with every touchdown soft).
+export const LAND = { margin: 0.9, vcap: 1.2, lead: 0.03 };
+const LAND_H0 = 0.5; // height of the car's origin above the ground when the tyres first touch
 const clamp = THREE.MathUtils.clamp;
 
 // ---------- World queries ----------
@@ -452,7 +460,16 @@ export class Vehicle {
     // ---- Thrusters ----
     this.boosting = false;
     this.hovering = false;
+    this.landing = false;
     this.nozzleU.fill(0);
+    if (contacts || !(inp.land || this.autoLand)) this.landBurn = false;
+    // Flight assist also catches a fall that would land too hard with a late burn of its own,
+    // unless the pilot is flying the lift jets themselves.
+    if (contacts || inp.lift || !(this.assist || this.autopilot) || !p.fLift) this.autoLand = false;
+    else if (!this.autoLand && this.vel.y < -3 && raycast(this.pos, DOWN, 80, _ln)) {
+      const hg = hitInfo.t - LAND_H0;
+      this.autoLand = this.vel.y * this.vel.y + 2 * G * hg > 9 * 9;
+    }
     if (this.gas > 0 && p.nozzles.length) this.thrusters(h, inp, nc ? nAvg : null);
 
     // ---- Body contacts ----
@@ -508,6 +525,27 @@ export class Vehicle {
     this.hopAge = (this.hopAge || 0) + h;
   }
 
+  // Lift for a late-burn landing: zero while the car can still stop in time, then the deceleration
+  // that brings it to vcap exactly at the ground, then a gentle vcap descent until the tyres touch.
+  landLift(up, Lmax, m, vcap) {
+    const tag = raycast(this.pos, DOWN, 80, _ln);
+    const hg = (tag ? hitInfo.t : 80) - LAND_H0, vy = this.vel.y;
+    if (up < 0.5) return 0; // still rolling upright: save the jets for the attitude
+    // Planned deceleration, for the car level (the flight computer is levelling it meanwhile); the
+    // reserve above MARGIN covers what a not-quite-level car loses.
+    const aNet = LAND.margin * Lmax / m - G;
+    if (vy < -vcap && aNet > 0.5) {
+      const need = (vy * vy - vcap * vcap) / (2 * aNet) - vy * LAND.lead;
+      if (!this.landBurn && hg > need) return 0; // coast
+      this.landBurn = true;
+      const aReq = (vy * vy - vcap * vcap) / (2 * Math.max(hg, 0.05));
+      return clamp(m * (G + aReq) / up, 0, Lmax);
+    }
+    if (!this.landBurn && hg > 0.8) return 0;
+    this.landBurn = true;
+    return clamp(m * (G + 4 * (-vcap - vy)) / up, 0, Lmax);
+  }
+
   // Cold-gas thrusters. Rear nozzles push the car forward; on the Rocket a flight computer
   // fires the four lift nozzles and the two nose nozzles to hop, hover and hold or change attitude.
   thrusters(h, inp, nAvg) {
@@ -530,7 +568,12 @@ export class Vehicle {
       // The hop fires the lift jets along the car's own up axis; the flight computer scales them by how
       // upright the car is, so a roll during the hop doesn't shove the car sideways off its line.
       if (this.hopT > 0) L = Math.min(Lmax, 2.15 * m * G) * clamp(upW.y, 0, 1);
-      else if (inp.lift && airborne && upW.y > 0.5) {
+      else if ((inp.land || this.autoLand) && airborne) {
+        // Most lift the four jets give without pitching the car: the centre of mass sits nearer the
+        // front pair (0.8 m vs 1.92 m to the rear pair), so the front jets saturate first.
+        L = this.landLift(upW.y, 2 * p.fLift * (0.8 + 1.92) / 1.92, m, inp.land ? LAND.vcap : 3);
+        this.landing = L > 0;
+      } else if (inp.lift && airborne && upW.y > 0.5) {
         // Hover lift only once the car is nearly upright (faded in from 30 to 60 deg of tilt), so jets
         // fired mid-roll don't shove the car sideways.
         const vyT = 5 * (inp.throttle || 0) - 6 * (inp.brake || 0);
@@ -552,7 +595,7 @@ export class Vehicle {
         } else if (assist) {
           // Level the car. While hovering, lean against horizontal drift like a drone (up to ~25 deg).
           const tg = _f.set(0, 1, 0);
-          if (inp.lift && this.hopT <= 0) {
+          if (inp.lift && !inp.land && this.hopT <= 0) {
             // ...but not while dropping fast: then every jet points straight down to brake the fall.
             const lk = 0.12 * clamp(1 - (Math.abs(this.vel.y) - 1) / 4, 0, 1) * clamp((this.pos.y - 1.5) / 3, 0, 1); // and flat for touchdown
             tg.set(-this.vel.x * lk, 1, -this.vel.z * lk);

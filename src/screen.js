@@ -45,7 +45,7 @@ export class Telemetry {
       mph: 0, gear: 'P', battery: 86, brake: 0, accel: 0, regen: 0, battT: 96, motorT: 150, brakeT: this.brakeT,
       tyres: [0, 1, 2, 3].map(() => ({ psi: 28, temp: 62 })), gx: 0, gy: 0, trace: this.trace, elev: 0,
       runs: this.runs, best: null, last: null, t60: 0, t60run: false, session: 0, gas: null, gasPsi: 0,
-      boosting: false, hovering: false, trackMode: false, fans: 0, downforce: 0, wing: false, variant: '',
+      boosting: false, hovering: false, landing: false, trackMode: false, fans: 0, downforce: 0, wing: false, variant: '',
     };
   }
 
@@ -114,6 +114,7 @@ export class Telemetry {
     t.gasPsi = t.gas == null ? 0 : 5500 * t.gas;
     t.boosting = v.boosting;
     t.hovering = v.hovering;
+    t.landing = v.landing;
     t.trackMode = v.trackMode;
     t.fans = v.suction;
     t.downforce = v.downforce || 0;
@@ -497,6 +498,7 @@ export class CockpitScreen {
     let state = 'Boost Ready';
     if (t.gas == null) state = 'Suction fans only';
     else if (t.boosting) state = 'BOOST';
+    else if (t.landing) state = 'Landing burn';
     else if (t.hovering) state = 'Hover';
     else if (v < 0.08) state = 'Recharging';
     g.fillText(t.gas == null ? state : `${Math.round(v * 100)}% · ${state}`, x + w - 4, y + 20);
